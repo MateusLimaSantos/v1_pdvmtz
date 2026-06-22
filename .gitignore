@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Ambientes locais
+.venv/
+venv/
+env/
+
+# Configuracoes e dados locais
+.env
+.codex_backups/
+data/*.db
+data/*.db-*
+data/xmls_nfe/
+reports/
+backups/
+
+# Arquivos gerados pelo esboco
+tudo.txt
+_temp_*.png
+
+# IDE / SO
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
