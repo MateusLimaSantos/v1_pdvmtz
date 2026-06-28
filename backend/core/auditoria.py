@@ -4,10 +4,9 @@ exclusões, cancelamentos, movimentações de caixa, alterações de
 configuração). Cada chamada de escrita relevante no backend chama
 registrar_auditoria() após a operação, com sucesso ou falha.
 """
-
-from core.database import get_db_connection
-from core.helpers import _iso_now, _fmt_data
-from core.state import state
+from backend.core.database import get_db_connection
+from backend.core.helpers import _iso_now, _fmt_data
+from backend.core.state import state
 
 
 def registrar_auditoria(

@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
 
-from core.relatorios import relatorio_vendas_periodo, relatorio_curva_abc
+from backend.core.relatorios import relatorio_vendas_periodo, relatorio_curva_abc
 
 
 class TelaRelatorios(tk.Frame):
@@ -44,9 +44,7 @@ class TelaRelatorios(tk.Frame):
 
     @staticmethod
     def _data_valida(texto: str) -> bool:
-        return bool(re.match(r"^\d{2}/\d{2}/\d{4}$", texto.strip())) and _eh_data_real(
-            texto.strip()
-        )
+        return bool(re.match(r"^\d{2}/\d{2}/\d{4}$", texto.strip())) and _eh_data_real(texto.strip())
 
     # ── Aba: vendas por período ──────────────────────────────
 
@@ -54,9 +52,7 @@ class TelaRelatorios(tk.Frame):
         filtros = tk.Frame(aba)
         filtros.pack(fill="x", pady=(0, 12))
 
-        tk.Label(filtros, text="Data início (dd/mm/aaaa):").pack(
-            side="left", padx=(0, 4)
-        )
+        tk.Label(filtros, text="Data início (dd/mm/aaaa):").pack(side="left", padx=(0, 4))
         self.entry_periodo_ini = tk.Entry(filtros, width=12)
         self.entry_periodo_ini.pack(side="left", padx=(0, 12))
 
@@ -76,9 +72,7 @@ class TelaRelatorios(tk.Frame):
             bg="#1976D2",
             fg="white",
         ).pack(side="left", padx=(0, 8))
-        tk.Button(filtros, text="Mês atual", command=self._preencher_mes_atual).pack(
-            side="left"
-        )
+        tk.Button(filtros, text="Mês atual", command=self._preencher_mes_atual).pack(side="left")
 
         self.frame_resultado_periodo = tk.Frame(aba)
         self.frame_resultado_periodo.pack(fill="both", expand=True, pady=(10, 0))
@@ -90,7 +84,7 @@ class TelaRelatorios(tk.Frame):
             w.destroy()
         tk.Label(
             self.frame_resultado_periodo,
-            text='Escolha um período e clique em "Gerar relatório".',
+            text="Escolha um período e clique em \"Gerar relatório\".",
             fg="#777",
         ).pack(pady=30)
 
@@ -115,9 +109,7 @@ class TelaRelatorios(tk.Frame):
         dt_ini = datetime.strptime(data_ini, "%d/%m/%Y")
         dt_fim = datetime.strptime(data_fim, "%d/%m/%Y")
         if dt_ini > dt_fim:
-            messagebox.showerror(
-                "Relatórios", "A data início não pode ser depois da data fim."
-            )
+            messagebox.showerror("Relatórios", "A data início não pode ser depois da data fim.")
             return
 
         relatorio = relatorio_vendas_periodo(data_ini, data_fim)
@@ -143,17 +135,10 @@ class TelaRelatorios(tk.Frame):
 
         resumo = tk.Frame(self.frame_resultado_periodo)
         resumo.pack(fill="x", pady=(0, 12))
+        self._linha_resumo(resumo, "Quantidade de vendas:", str(relatorio["qtd_vendas"]))
+        self._linha_resumo(resumo, "Total descontos:", f"R$ {relatorio['descontos']:.2f}")
         self._linha_resumo(
-            resumo, "Quantidade de vendas:", str(relatorio["qtd_vendas"])
-        )
-        self._linha_resumo(
-            resumo, "Total descontos:", f"R$ {relatorio['descontos']:.2f}"
-        )
-        self._linha_resumo(
-            resumo,
-            "Total geral vendido:",
-            f"R$ {relatorio['total_geral']:.2f}",
-            destaque=True,
+            resumo, "Total geral vendido:", f"R$ {relatorio['total_geral']:.2f}", destaque=True
         )
 
         tk.Label(
@@ -163,18 +148,14 @@ class TelaRelatorios(tk.Frame):
         ).pack(anchor="w", pady=(4, 4))
 
         colunas = ("forma", "total")
-        tree = ttk.Treeview(
-            self.frame_resultado_periodo, columns=colunas, show="headings", height=6
-        )
+        tree = ttk.Treeview(self.frame_resultado_periodo, columns=colunas, show="headings", height=6)
         tree.heading("forma", text="Forma de pagamento")
         tree.heading("total", text="Total")
         tree.column("forma", width=220, anchor="w")
         tree.column("total", width=150, anchor="e")
         tree.pack(fill="x")
 
-        for forma, valor in sorted(
-            relatorio["totais_por_forma"].items(), key=lambda x: -x[1]
-        ):
+        for forma, valor in sorted(relatorio["totais_por_forma"].items(), key=lambda x: -x[1]):
             tree.insert("", "end", values=(forma, f"R$ {valor:.2f}"))
 
     @staticmethod
@@ -258,9 +239,7 @@ class TelaRelatorios(tk.Frame):
             if limite <= 0:
                 raise ValueError
         except ValueError:
-            messagebox.showerror(
-                "Relatórios", "Informe um número inteiro maior que zero."
-            )
+            messagebox.showerror("Relatórios", "Informe um número inteiro maior que zero.")
             return
 
         for row in self.tree_abc.get_children():
@@ -268,10 +247,7 @@ class TelaRelatorios(tk.Frame):
 
         dados = relatorio_curva_abc(limite=limite)
         if not dados:
-            messagebox.showinfo(
-                "Relatórios",
-                "Nenhuma venda concluída encontrada para gerar a curva ABC.",
-            )
+            messagebox.showinfo("Relatórios", "Nenhuma venda concluída encontrada para gerar a curva ABC.")
             return
 
         for item in dados:

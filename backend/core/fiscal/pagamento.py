@@ -10,25 +10,19 @@ Este módulo é o único lugar que decide qual caminho seguir — gateway_pix.py
 só faz a chamada HTTP crua, pix.py só gera o QR estático. Nem um nem o outro
 sabe sobre os outros 2 modos.
 """
-
 import uuid
 
 from core.database import get_db_connection
 from core.helpers import _iso_now, get_config, set_config
 from core.seguranca import cifrar, decifrar, mascarar_token
 from core.fiscal.pix import gerar_pdf_pix
-from core.fiscal.gateway_pix import (
-    criar_cobranca_pix,
-    consultar_status_pagamento,
-    testar_credencial,
-)
+from core.fiscal.gateway_pix import criar_cobranca_pix, consultar_status_pagamento, testar_credencial
 from core.auditoria import registrar_auditoria
 
 MODOS_VALIDOS = ("manual", "automatico", "hibrido")
 
 
 # ───────────────────────────── Configuração ─────────────────────────────
-
 
 def obter_modo_pagamento() -> str:
     return get_config("pix_modo_pagamento", "manual")
@@ -38,15 +32,11 @@ def salvar_modo_pagamento(modo: str) -> tuple[bool, str]:
     if modo not in MODOS_VALIDOS:
         return False, "Modo inválido."
     set_config("pix_modo_pagamento", modo)
-    registrar_auditoria(
-        "alterar_configuracao", "pagamento", "", f"Modo definido como '{modo}'"
-    )
+    registrar_auditoria("alterar_configuracao", "pagamento", "", f"Modo definido como '{modo}'")
     return True, f"Modo de pagamento definido como '{modo}'."
 
 
-def salvar_credencial_gateway(
-    access_token: str, testar: bool = True
-) -> tuple[bool, str]:
+def salvar_credencial_gateway(access_token: str, testar: bool = True) -> tuple[bool, str]:
     """Cifra e salva o access_token do gateway. Se testar=True, valida a
     credencial com o gateway antes de salvar definitivamente."""
     access_token = access_token.strip()
@@ -58,20 +48,15 @@ def salvar_credencial_gateway(
         ok, msg = testar_credencial(token_cifrado_temp)
         if not ok:
             registrar_auditoria(
-                "alterar_configuracao",
-                "gateway_pix",
-                "",
-                f"Falha ao validar nova credencial: {msg}",
-                sucesso=False,
+                "alterar_configuracao", "gateway_pix", "",
+                f"Falha ao validar nova credencial: {msg}", sucesso=False,
             )
             return False, f"Credencial não pôde ser validada: {msg}"
 
     cifrado = cifrar(access_token)
     set_config("pix_gateway_token", cifrado)
     registrar_auditoria(
-        "alterar_configuracao",
-        "gateway_pix",
-        "",
+        "alterar_configuracao", "gateway_pix", "",
         f"Credencial atualizada (token termina em ...{mascarar_token(access_token)[-4:]})",
     )
     return True, "Credencial do gateway salva e validada."
@@ -79,9 +64,7 @@ def salvar_credencial_gateway(
 
 def remover_credencial_gateway():
     set_config("pix_gateway_token", "")
-    registrar_auditoria(
-        "alterar_configuracao", "gateway_pix", "", "Credencial removida"
-    )
+    registrar_auditoria("alterar_configuracao", "gateway_pix", "", "Credencial removida")
 
 
 def gateway_configurado() -> bool:
@@ -96,7 +79,6 @@ def token_mascarado_atual() -> str:
 
 
 # ───────────────────────────── Iniciar cobrança ─────────────────────────────
-
 
 def iniciar_cobranca(valor: float, descricao: str = "Venda PDV") -> dict:
     """
@@ -132,11 +114,8 @@ def iniciar_cobranca(valor: float, descricao: str = "Venda PDV") -> dict:
         # ao caixa para decisão manual de como proceder (não inventa
         # contingência silenciosa quando o lojista optou só por automático).
         registrar_auditoria(
-            "pix_automatico_falhou",
-            "pagamento",
-            referencia,
-            f"Falha sem contingência configurada: {resultado['motivo']}",
-            sucesso=False,
+            "pix_automatico_falhou", "pagamento", referencia,
+            f"Falha sem contingência configurada: {resultado['motivo']}", sucesso=False,
         )
         return resultado
 
@@ -146,9 +125,7 @@ def iniciar_cobranca(valor: float, descricao: str = "Venda PDV") -> dict:
             return resultado
         # Contingência: cai para manual automaticamente, na mesma venda.
         registrar_auditoria(
-            "contingencia_acionada",
-            "pagamento",
-            referencia,
+            "contingencia_acionada", "pagamento", referencia,
             f"Gateway falhou ({resultado['motivo']}); usando Pix estático manual",
         )
         manual = _cobranca_manual(valor, referencia)
@@ -159,11 +136,7 @@ def iniciar_cobranca(valor: float, descricao: str = "Venda PDV") -> dict:
     # Modo desconhecido (config corrompida) — cai em manual por segurança,
     # já que manual nunca depende de rede nem de credenciais.
     registrar_auditoria(
-        "pagamento",
-        "pagamento",
-        referencia,
-        f"Modo desconhecido '{modo}', usando manual",
-        sucesso=False,
+        "pagamento", "pagamento", referencia, f"Modo desconhecido '{modo}', usando manual", sucesso=False
     )
     return _cobranca_manual(valor, referencia)
 
@@ -191,20 +164,16 @@ def _cobranca_manual(valor: float, referencia: str) -> dict:
 def _tentar_cobranca_automatica(valor: float, descricao: str, referencia: str) -> dict:
     if not gateway_configurado():
         return {
-            "modo_efetivo": "automatico",
-            "sucesso": False,
-            "motivo": "Gateway não configurado.",
-            "referencia": referencia,
+            "modo_efetivo": "automatico", "sucesso": False,
+            "motivo": "Gateway não configurado.", "referencia": referencia,
         }
 
     token_cifrado = get_config("pix_gateway_token", "")
     ok, resultado = criar_cobranca_pix(token_cifrado, valor, descricao, referencia)
     if not ok:
         return {
-            "modo_efetivo": "automatico",
-            "sucesso": False,
-            "motivo": resultado,
-            "referencia": referencia,
+            "modo_efetivo": "automatico", "sucesso": False,
+            "motivo": resultado, "referencia": referencia,
         }
 
     _registrar_cobranca(
@@ -221,7 +190,6 @@ def _tentar_cobranca_automatica(valor: float, descricao: str, referencia: str) -
 
 
 # ───────────────────────────── Acompanhar / baixar ─────────────────────────────
-
 
 def _registrar_cobranca(referencia: str, payment_id: str, valor: float, modo: str):
     agora = _iso_now()
@@ -242,12 +210,7 @@ def confirmar_recebimento_manual(referencia: str) -> tuple[bool, str]:
             (_iso_now(), referencia),
         ).rowcount
     if updated:
-        registrar_auditoria(
-            "confirmar_pagamento",
-            "pagamento",
-            referencia,
-            "Confirmado manualmente pelo caixa",
-        )
+        registrar_auditoria("confirmar_pagamento", "pagamento", referencia, "Confirmado manualmente pelo caixa")
         return True, "Recebimento confirmado."
     return False, "Cobrança não encontrada ou já processada."
 
@@ -270,9 +233,7 @@ def consultar_status_cobranca(referencia: str) -> tuple[bool, str]:
         return True, cobranca["status"]
 
     token_cifrado = get_config("pix_gateway_token", "")
-    ok, status_gateway = consultar_status_pagamento(
-        token_cifrado, cobranca["payment_id"]
-    )
+    ok, status_gateway = consultar_status_pagamento(token_cifrado, cobranca["payment_id"])
     if not ok:
         # Falha de consulta não muda o status local — só reporta o erro,
         # o polling tenta de novo na próxima iteração.
@@ -293,12 +254,7 @@ def consultar_status_cobranca(referencia: str) -> tuple[bool, str]:
                 (novo_status, _iso_now(), cobranca["referencia"]),
             )
         if novo_status == "aprovado":
-            registrar_auditoria(
-                "confirmar_pagamento",
-                "pagamento",
-                cobranca["referencia"],
-                "Aprovado via gateway (polling)",
-            )
+            registrar_auditoria("confirmar_pagamento", "pagamento", cobranca["referencia"], "Aprovado via gateway (polling)")
     return True, novo_status
 
 

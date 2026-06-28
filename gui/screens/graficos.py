@@ -4,7 +4,7 @@ from tkinter import ttk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from core.relatorios import relatorio_vendas_mensal
+from backend.core.relatorios import relatorio_vendas_mensal
 
 
 class TelaGraficos(tk.Frame):
@@ -62,11 +62,7 @@ class TelaGraficos(tk.Frame):
         combo_tipo.bind("<<ComboboxSelected>>", lambda e: self.atualizar_grafico())
 
         tk.Button(
-            filtros,
-            text="Atualizar",
-            command=self.atualizar_grafico,
-            bg="#1976D2",
-            fg="white",
+            filtros, text="Atualizar", command=self.atualizar_grafico, bg="#1976D2", fg="white"
         ).pack(side="left")
 
         self.frame_grafico = tk.Frame(self)
@@ -99,8 +95,7 @@ class TelaGraficos(tk.Frame):
         ax.bar(rotulos, valores, color=cores)
 
         ax.set_title(
-            "Vendas por mês — "
-            + ("Valor (R$)" if usar_valor else "Quantidade de vendas"),
+            "Vendas por mês — " + ("Valor (R$)" if usar_valor else "Quantidade de vendas"),
             fontsize=12,
         )
         ax.set_ylabel("R$" if usar_valor else "Qtd. vendas")

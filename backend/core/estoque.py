@@ -1,8 +1,9 @@
 import sqlite3
 from config import TIPOS_UNIDADE_VALIDOS, TIPOS_PESO, UNIDADE_LABEL
-from core.database import get_db_connection
-from core.helpers import _iso_now, _fmt_data
-from core.state import state
+from backend.core.database import get_db_connection
+from backend.core.helpers import _iso_now, _fmt_data
+from backend.core.state import state
+from backend.core.auditoria import registrar_auditoria
 
 # ─────────────────────────────────────────
 # PRODUTOS
@@ -91,8 +92,13 @@ def adicionar_produto(
                         state.operador["id"] if state.operador else None,
                     ),
                 )
+        registrar_auditoria(
+            "cadastrar", "produto", ean,
+            f"Nome='{nome.upper()}', preço=R$ {preco:.2f}, estoque inicial={estoque_inicial}",
+        )
         return True, f"'{nome.upper()}' cadastrado como [{tipo_unidade}]."
     except sqlite3.IntegrityError as e:
+        registrar_auditoria("cadastrar", "produto", ean, f"Falha: {e}", sucesso=False)
         return False, f"Erro: {e}"
 
 
@@ -119,12 +125,16 @@ def editar_produto(
     with get_db_connection() as conn:
         row = conn.execute("SELECT 1 FROM produtos WHERE ean=?", (ean,)).fetchone()
         if not row:
+            registrar_auditoria("editar", "produto", ean, "Falha: não encontrado", sucesso=False)
             return False, "Produto não encontrado."
         conn.execute(
             "UPDATE produtos SET nome=?, preco_venda=?, descricao=?, "
             "estoque_minimo=?, preco_referencia=? WHERE ean=?",
             (nome.upper(), preco, descricao, estoque_minimo, preco_referencia, ean),
         )
+    registrar_auditoria(
+        "editar", "produto", ean, f"Nome='{nome.upper()}', preço=R$ {preco:.2f}"
+    )
     return True, "Produto atualizado."
 
 
@@ -151,11 +161,16 @@ def ajustar_estoque(ean: str, qtd: float, motivo: str) -> tuple[bool, str]:
     with get_db_connection() as conn:
         row = conn.execute("SELECT * FROM produtos WHERE ean=?", (ean,)).fetchone()
         if not row:
+            registrar_auditoria("ajustar_estoque", "produto", ean, "Falha: não encontrado", sucesso=False)
             return False, "Produto não encontrado."
         prod = dict(row)
 
     nova = round(prod["estoque_atual"] + qtd, 4)
     if nova < 0:
+        registrar_auditoria(
+            "ajustar_estoque", "produto", ean,
+            f"Falha: resultaria em estoque negativo ({nova:.4f})", sucesso=False,
+        )
         return (
             False,
             f"Resultaria em estoque negativo ({nova:.4f}). Operação cancelada.",
@@ -176,6 +191,10 @@ def ajustar_estoque(ean: str, qtd: float, motivo: str) -> tuple[bool, str]:
             ),
         )
     un = UNIDADE_LABEL.get(prod["tipo_unidade"], "un")
+    registrar_auditoria(
+        "ajustar_estoque", "produto", ean,
+        f"{prod['estoque_atual']:.3f} → {nova:.3f} {un} | Motivo: {motivo}",
+    )
     return True, f"{prod['estoque_atual']:.3f} → {nova:.3f} {un} | Motivo: {motivo}"
 
 

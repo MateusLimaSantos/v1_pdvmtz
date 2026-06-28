@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-from core.fiscal.sefaz import carregar_xml_de_arquivo, preparar_entrada_itens, dar_entrada_itens
+from backend.core.fiscal.sefaz import carregar_xml_de_arquivo, preparar_entrada_itens, dar_entrada_itens
 
 class TelaNFe(tk.Frame):
     def __init__(self, parent, controlador_app):

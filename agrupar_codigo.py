@@ -3,14 +3,13 @@ import os
 
 def consolidar_codigo():
     # Diretórios e arquivos que devem ser estritamente ignorados
-    dirs_ignorados = {"data", "necessarios", "reports", "tests", "venv", "__pycache__", ".codex_backups"}
+    dirs_ignorados = {"data", "necessarios", "reports", "tests", "venv", "__pycache__"}
     arquivos_ignorados = {
         ".gitignore",
         "README.md",
         "requirements.txt",
         "agrupar_codigo.py",
         "tudo.txt",
-        ".chave_local"
     }
 
     arquivo_saida = "tudo.txt"

@@ -62,6 +62,56 @@ def inicializar_banco():
             FOREIGN KEY (operador_id) REFERENCES operadores(id)
         );
 
+        -- Garante no nivel do banco que so pode existir 1 caixa com
+        -- status 'aberto' por vez, mesmo se dois processos (dois PDVs
+        -- fisicos) tentarem abrir caixa ao mesmo tempo. Sem isso, uma
+        -- janela de corrida entre o SELECT de verificacao e o INSERT
+        -- permite dois caixas abertos simultaneamente.
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_unico_caixa_aberto
+            ON abertura_caixa (status)
+            WHERE status = 'aberto';
+
+        CREATE TABLE IF NOT EXISTS movimentacoes_caixa (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            caixa_id    INTEGER NOT NULL,
+            operador_id INTEGER NOT NULL,
+            data_hora   TEXT NOT NULL,
+            tipo        TEXT NOT NULL CHECK (tipo IN ('sangria', 'suprimento')),
+            valor       REAL NOT NULL CHECK (valor > 0),
+            motivo      TEXT DEFAULT '',
+            FOREIGN KEY (caixa_id) REFERENCES abertura_caixa(id),
+            FOREIGN KEY (operador_id) REFERENCES operadores(id)
+        );
+
+        CREATE TABLE IF NOT EXISTS auditoria (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            data_hora   TEXT NOT NULL,
+            operador_id INTEGER,
+            operador_nome TEXT NOT NULL DEFAULT 'Sistema',
+            acao        TEXT NOT NULL,
+            entidade    TEXT NOT NULL,
+            entidade_id TEXT DEFAULT '',
+            detalhes    TEXT DEFAULT '',
+            sucesso     INTEGER NOT NULL DEFAULT 1
+        );
+        CREATE INDEX IF NOT EXISTS idx_auditoria_data ON auditoria (data_hora DESC);
+        CREATE INDEX IF NOT EXISTS idx_auditoria_entidade ON auditoria (entidade);
+
+        CREATE TABLE IF NOT EXISTS cobrancas_pix (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            referencia      TEXT NOT NULL UNIQUE,
+            payment_id      TEXT DEFAULT '',
+            valor           REAL NOT NULL,
+            modo            TEXT NOT NULL CHECK (modo IN ('manual', 'automatico')),
+            status          TEXT NOT NULL DEFAULT 'pendente'
+                            CHECK (status IN ('pendente', 'aprovado', 'expirado', 'erro', 'cancelado')),
+            data_criacao    TEXT NOT NULL,
+            data_atualizacao TEXT NOT NULL,
+            contingencia_acionada INTEGER NOT NULL DEFAULT 0,
+            motivo_falha    TEXT DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_cobrancas_status ON cobrancas_pix (status);
+
         CREATE TABLE IF NOT EXISTS vendas (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
             caixa_id            INTEGER NOT NULL,

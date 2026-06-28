@@ -1,9 +1,20 @@
+import os
+import platform
+import subprocess
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import (
+    ttk,
+    messagebox,
+    simpledialog,
+    scrolledtext,
+)  # <-- Adicione o scrolledtext
 
-from core.historico import listar_vendas, detalhes_venda
-from core.pdv import cancelar_venda
-from core.state import state
+from backend.core.historico import listar_vendas, detalhes_venda
+from backend.core.pdv import cancelar_venda
+from backend.core.state import state
+
+# IMPORTANTE: Ajuste o caminho de importação abaixo conforme a estrutura de pastas do seu projeto
+from backend.core.fiscal.cupom import formatar_cupom, exportar_pdf_cupom
 
 
 class TelaHistorico(tk.Frame):
@@ -16,6 +27,70 @@ class TelaHistorico(tk.Frame):
 
         self.configurar_layout()
         self.carregar_dados()
+
+    def _mostrar_cupom(self, venda: dict):
+        # 1. Adaptar as chaves do dicionário para a função formatar_cupom
+        # O banco de dados traz "nome_exibicao", mas o cupom espera "nome"
+        itens_cupom = []
+        for item in venda["itens"]:
+            itens_cupom.append(
+                {
+                    "nome": item.get("nome_exibicao", "Produto"),
+                    "qtd": item["qtd"],
+                    "preco_total": item["preco_total"],
+                    "tipo_unidade": item.get("tipo_unidade", "unidade"),
+                    "desconto_item": item.get("desconto_item", 0.0),
+                }
+            )
+
+        # 2. Gerar o texto do cupom usando sua função existente
+        texto_cupom, _ = formatar_cupom(
+            itens=itens_cupom,
+            total=venda["total"],
+            desconto_venda=venda.get("desconto", 0.0),
+            forma_pagamento=venda.get("forma_pagamento", "N/A"),
+            troco=venda.get("troco", 0.0),
+        )
+
+        # 3. Criar uma nova janela para exibir o texto do cupom
+        janela_cupom = tk.Toplevel(self)
+        janela_cupom.title(f"Nota Fiscal - Venda #{venda['id']}")
+        janela_cupom.geometry("350x550")
+
+        # Área de texto com barra de rolagem (somente leitura)
+        txt = scrolledtext.ScrolledText(janela_cupom, font=("Courier", 9))
+        txt.pack(fill="both", expand=True, padx=10, pady=10)
+        txt.insert("1.0", texto_cupom)
+        txt.config(state="disabled")
+
+        # 4. Função interna para exportar e abrir o PDF automaticamente
+        def abrir_pdf():
+            try:
+                caminho_arq = exportar_pdf_cupom(texto_cupom, venda["id"])
+
+                # Descobre o Sistema Operacional e abre o arquivo no leitor padrão
+                if platform.system() == "Windows":
+                    os.startfile(caminho_arq)
+                elif platform.system() == "Darwin":  # macOS
+                    subprocess.call(["open", caminho_arq])
+                else:  # Linux
+                    subprocess.call(["xdg-open", caminho_arq])
+
+            except Exception as e:
+                messagebox.showerror(
+                    "Erro ao abrir PDF",
+                    f"O PDF foi gerado, mas não pôde ser aberto automaticamente.\nErro: {e}",
+                    parent=janela_cupom,
+                )
+
+        tk.Button(
+            janela_cupom,
+            text="Gerar e Abrir PDF",
+            command=abrir_pdf,
+            bg="#388E3C",
+            fg="white",
+            font=("Arial", 10, "bold"),
+        ).pack(pady=(0, 10))
 
     def configurar_layout(self):
         topo = tk.Frame(self)
@@ -251,6 +326,14 @@ class TelaHistorico(tk.Frame):
 
         frame_rodape = tk.Frame(janela)
         frame_rodape.pack(pady=(0, 12))
+
+        tk.Button(
+            frame_rodape,
+            text="Ver Nota Fiscal",
+            command=lambda: self._mostrar_cupom(venda),
+            bg="#1976D2",
+            fg="white",
+        ).pack(side="left", padx=(0, 8))
 
         if (
             venda["status"] != "cancelada"
