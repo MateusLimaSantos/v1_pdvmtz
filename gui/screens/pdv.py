@@ -2,13 +2,15 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from core.caixa import (
+from backend.core.caixa import (
     caixa_aberto_no_banco,
     abrir_caixa,
     fechar_caixa,
     resumo_fechamento_caixa,
+    registrar_sangria,
+    registrar_suprimento,
 )
-from core.pdv import (
+from backend.core.pdv import (
     buscar_produto_por_ean,
     adicionar_item_ao_carrinho,
     total_bruto_carrinho,
@@ -18,9 +20,19 @@ from core.pdv import (
     gerar_qrcode_pix_para_venda,
     produtos_cadastrados_existem,
     registrar_peso,
+    remover_item_indice,
+    alterar_quantidade_indice,
+    calcular_desconto_valor,
 )
-from core.state import state
-from config import TIPOS_PESO
+from backend.core.fiscal.pagamento import (
+    iniciar_cobranca,
+    confirmar_recebimento_manual,
+    consultar_status_cobranca,
+    cancelar_cobranca,
+)
+from backend.core.state import state
+from backend.core.helpers import parse_float
+from backend.config import TIPOS_PESO
 
 
 class TelaPDV(tk.Frame):
@@ -28,6 +40,7 @@ class TelaPDV(tk.Frame):
         super().__init__(parent)
         self.controlador = controlador_app
         self.carrinho = []
+        self.desconto_venda_atual = 0.0
 
         self.configurar_layout()
         self.verificar_status_caixa()
@@ -103,16 +116,18 @@ class TelaPDV(tk.Frame):
         entry_fundo.focus_set()
 
         def executar_abertura():
-            try:
-                fundo = float(entry_fundo.get().replace(",", "."))
-                sucesso, msg = abrir_caixa(fundo)
-                if sucesso:
-                    messagebox.showinfo("Sucesso", msg)
-                    self.mostrar_painel_vendas()
-                else:
-                    messagebox.showwarning("Aviso", msg)
-            except ValueError:
+            if not entry_fundo.winfo_exists():
+                return
+            fundo = parse_float(entry_fundo.get())
+            if fundo is None:
                 messagebox.showerror("Erro", "Insira um valor numérico válido.")
+                return
+            sucesso, msg = abrir_caixa(fundo)
+            if sucesso:
+                messagebox.showinfo("Sucesso", msg)
+                self.mostrar_painel_vendas()
+            else:
+                messagebox.showwarning("Aviso", msg)
 
         tk.Button(
             frame_abrir,
@@ -122,7 +137,21 @@ class TelaPDV(tk.Frame):
             fg="white",
             command=executar_abertura,
         ).pack(pady=20, fill="x", padx=40)
-        self.bind_all("<F2>", lambda e: executar_abertura())
+
+        # Atalho F2 escopado a esta tela: usa bind (nao bind_all) e
+        # remove o binding quando o frame e destruido, evitando que o
+        # callback continue vivo apontando para um widget ja destruido.
+        bind_id = self.winfo_toplevel().bind(
+            "<F2>", lambda e: executar_abertura()
+        )
+
+        def _remover_atalho_f2(_event=None):
+            try:
+                self.winfo_toplevel().unbind("<F2>", bind_id)
+            except tk.TclError:
+                pass
+
+        frame_abrir.bind("<Destroy>", _remover_atalho_f2)
 
     def mostrar_painel_vendas(self):
         self.limpar_tela()
@@ -214,6 +243,26 @@ class TelaPDV(tk.Frame):
             fg="white",
             command=self.executar_finalizacao,
         ).pack(fill="x", padx=15, pady=(30, 5))
+
+        frame_caixa_extra = tk.Frame(frame_direito)
+        frame_caixa_extra.pack(fill="x", padx=15, pady=5)
+        tk.Button(
+            frame_caixa_extra,
+            text="Sangria (F9)",
+            font=("Arial", 10),
+            bg="#FFA000",
+            fg="white",
+            command=self.abrir_modal_sangria,
+        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+        tk.Button(
+            frame_caixa_extra,
+            text="Suprimento",
+            font=("Arial", 10),
+            bg="#7CB342",
+            fg="white",
+            command=self.abrir_modal_suprimento,
+        ).pack(side="left", expand=True, fill="x", padx=(4, 0))
+
         tk.Button(
             frame_direito,
             text="Fechar Caixa",
@@ -221,6 +270,15 @@ class TelaPDV(tk.Frame):
             bg="#cfd8dc",
             command=self.executar_fechamento_caixa,
         ).pack(fill="x", padx=15, pady=5)
+        if state.operador and state.operador.get("perfil") == "admin":
+            tk.Button(
+                frame_direito,
+                text="Configurações",
+                font=("Arial", 10),
+                bg="#455A64",
+                fg="white",
+                command=self.controlador.mostrar_configuracoes,
+            ).pack(fill="x", padx=15, pady=5)
         tk.Button(
             frame_direito,
             text="Voltar ao Menu",
@@ -229,6 +287,113 @@ class TelaPDV(tk.Frame):
             fg="white",
             command=self.controlador.mostrar_tela_principal,
         ).pack(fill="x", padx=15, pady=5)
+
+        # Atalhos de teclado da tela de vendas, escopados a esta tela:
+        # bind local (nao bind_all) com unbind automatico ao trocar de
+        # tela, seguindo o mesmo padrao seguro usado no F2 da abertura
+        # de caixa. F2 ja existe no botao "Finalizar Venda" acima.
+        mapa_atalhos_pdv = [
+            ("<F2>", self.executar_finalizacao),
+            ("<F3>", self.cancelar_item_selecionado),
+            ("<F4>", self.focar_busca_produto),
+            ("<F5>", self.alterar_quantidade_selecionado),
+            ("<F6>", self.aplicar_desconto_venda),
+            ("<F8>", self._atalho_pix_rapido),
+            ("<F9>", self.abrir_modal_sangria),
+            ("<F10>", self.executar_fechamento_caixa),
+        ]
+        bind_ids_pdv = []
+        for tecla, callback in mapa_atalhos_pdv:
+            bind_id = self.winfo_toplevel().bind(tecla, lambda e, cb=callback: cb())
+            bind_ids_pdv.append((tecla, bind_id))
+
+        def _remover_atalhos_pdv(_event=None):
+            for tecla, bind_id in bind_ids_pdv:
+                try:
+                    self.winfo_toplevel().unbind(tecla, bind_id)
+                except tk.TclError:
+                    pass
+
+        frame_direito.bind("<Destroy>", _remover_atalhos_pdv)
+
+    def cancelar_item_selecionado(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Cancelar item", "Selecione um item na lista para cancelar.")
+            return
+        indice = self.tree.index(sel[0])
+        ok, resultado = remover_item_indice(self.carrinho, indice)
+        if not ok:
+            messagebox.showerror("Cancelar item", resultado)
+            return
+        self.atualizar_visual_carrinho()
+        messagebox.showinfo("Item cancelado", f"'{resultado}' removido do carrinho.")
+
+    def alterar_quantidade_selecionado(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Alterar quantidade", "Selecione um item na lista.")
+            return
+        indice = self.tree.index(sel[0])
+        item = self.carrinho[indice]
+
+        nova_qtd_texto = simpledialog.askstring(
+            "Alterar quantidade",
+            f"Nova quantidade para:\n{item['nome_exibicao']}",
+            initialvalue=str(item["qtd_desconto"]),
+            parent=self,
+        )
+        if not nova_qtd_texto:
+            return
+        nova_qtd = parse_float(nova_qtd_texto)
+        if nova_qtd is None:
+            messagebox.showerror("Alterar quantidade", "Quantidade inválida.")
+            return
+
+        ok, msg = alterar_quantidade_indice(self.carrinho, indice, nova_qtd)
+        if not ok:
+            messagebox.showerror("Alterar quantidade", msg)
+            return
+        self.atualizar_visual_carrinho()
+
+    def aplicar_desconto_venda(self):
+        if not self.carrinho:
+            messagebox.showwarning("Desconto", "O carrinho está vazio.")
+            return
+        total_atual = total_bruto_carrinho(self.carrinho)
+        valor_texto = simpledialog.askstring(
+            "Aplicar desconto",
+            f"Total atual: R$ {total_atual:.2f}\nValor do desconto (R$):",
+            parent=self,
+        )
+        if not valor_texto:
+            return
+        valor_desconto = parse_float(valor_texto)
+        if valor_desconto is None or valor_desconto <= 0:
+            messagebox.showerror("Desconto", "Informe um valor de desconto válido.")
+            return
+
+        ok, valor_aplicado, erro = calcular_desconto_valor(total_atual, valor_desconto)
+        if not ok:
+            messagebox.showerror("Desconto", erro)
+            return
+
+        self.desconto_venda_atual = valor_aplicado
+        self.atualizar_visual_carrinho()
+        messagebox.showinfo("Desconto aplicado", f"Desconto de R$ {valor_aplicado:.2f} aplicado à venda.")
+
+    def focar_busca_produto(self):
+        if self.entry_ean.winfo_exists():
+            self.entry_ean.focus_set()
+
+    def _atalho_pix_rapido(self):
+        """F8: atalho rápido para selecionar PIX como forma de pagamento
+        e já finalizar a venda, espelhando o atalho F8 do plano original
+        ('pagamento PIX')."""
+        if not self.cb_pagamento.winfo_exists():
+            return
+        self.cb_pagamento.set("PIX")
+        self.executar_finalizacao()
 
     def bipar_produto(self, event=None):
         ean = self.entry_ean.get().strip()
@@ -250,16 +415,15 @@ class TelaPDV(tk.Frame):
             )
             if not peso_texto:
                 return
-            try:
-                peso = float(peso_texto.replace(",", "."))
-                sucesso, msg = registrar_peso(item_lido, peso)
-                if not sucesso:
-                    messagebox.showwarning("Estoque insuficiente", msg)
-                    return
-                self.carrinho.append(item_lido)
-            except ValueError:
+            peso = parse_float(peso_texto)
+            if peso is None or peso <= 0:
                 messagebox.showerror("Erro", "Quantidade/Peso inválido.")
                 return
+            sucesso, msg = registrar_peso(item_lido, peso)
+            if not sucesso:
+                messagebox.showwarning("Estoque insuficiente", msg)
+                return
+            self.carrinho.append(item_lido)
         else:
             # Produtos unitários normais
             sucesso, msg = adicionar_item_ao_carrinho(self.carrinho, item_lido)
@@ -293,10 +457,91 @@ class TelaPDV(tk.Frame):
                 ),
             )
 
-        total = total_bruto_carrinho(self.carrinho)
-        self.lbl_total.config(text=f"R$ {total:.2f}")
+        total_bruto = total_bruto_carrinho(self.carrinho)
+        total_liquido = round(total_bruto - self.desconto_venda_atual, 2)
+        if self.desconto_venda_atual > 0:
+            self.lbl_total.config(text=f"R$ {total_liquido:.2f}  (desconto: -R$ {self.desconto_venda_atual:.2f})")
+        else:
+            self.lbl_total.config(text=f"R$ {total_liquido:.2f}")
         self.entry_recebido.delete(0, tk.END)
-        self.entry_recebido.insert(0, f"{total:.2f}")
+        self.entry_recebido.insert(0, f"{total_liquido:.2f}")
+
+    def _acompanhar_pix_automatico(self, resultado_pix: dict) -> bool:
+        """
+        Mostra o QR dinâmico do gateway e faz polling não-bloqueante
+        (via widget.after, sem travar a interface) até o pagamento ser
+        aprovado, rejeitado, ou o operador cancelar. Retorna True se
+        aprovado (a venda deve seguir), False caso contrário.
+        """
+        referencia = resultado_pix["referencia"]
+        janela = tk.Toplevel(self)
+        janela.title("Pagamento PIX automático")
+        janela.geometry("380x420")
+        janela.transient(self.winfo_toplevel())
+        janela.grab_set()
+        janela.protocol("WM_DELETE_WINDOW", lambda: None)  # fecha só pelo botão Cancelar
+
+        tk.Label(
+            janela, text="Aguardando pagamento via PIX", font=("Arial", 13, "bold")
+        ).pack(pady=(16, 8))
+
+        if resultado_pix.get("qr_code_base64"):
+            try:
+                import base64
+                from io import BytesIO
+                from PIL import Image, ImageTk
+
+                dados_img = base64.b64decode(resultado_pix["qr_code_base64"])
+                img = Image.open(BytesIO(dados_img)).resize((220, 220))
+                foto = ImageTk.PhotoImage(img)
+                lbl_img = tk.Label(janela, image=foto)
+                lbl_img.image = foto  # mantém referência viva
+                lbl_img.pack(pady=8)
+            except Exception:
+                tk.Label(janela, text="(QR Code indisponível para exibição)", fg="#777").pack(pady=8)
+
+        tk.Label(janela, text="Ou copie o código Pix:", font=("Arial", 9)).pack(pady=(8, 2))
+        entry_copia_cola = tk.Entry(janela, justify="center")
+        entry_copia_cola.insert(0, resultado_pix.get("qr_code", ""))
+        entry_copia_cola.config(state="readonly")
+        entry_copia_cola.pack(fill="x", padx=20)
+
+        lbl_status = tk.Label(janela, text="Aguardando confirmação...", fg="#1976D2")
+        lbl_status.pack(pady=12)
+
+        resultado_final = {"aprovado": False, "encerrado": False}
+
+        def cancelar():
+            resultado_final["encerrado"] = True
+            cancelar_cobranca(referencia)
+            janela.destroy()
+
+        tk.Button(
+            janela, text="Cancelar e usar outra forma de pagamento", command=cancelar, bg="#b00020", fg="white"
+        ).pack(pady=(8, 16), fill="x", padx=20)
+
+        def verificar():
+            if resultado_final["encerrado"]:
+                return
+            ok, status = consultar_status_cobranca(referencia)
+            if ok and status == "aprovado":
+                resultado_final["aprovado"] = True
+                resultado_final["encerrado"] = True
+                lbl_status.config(text="Pagamento aprovado!", fg="#2e7d32")
+                janela.after(600, janela.destroy)
+                return
+            if ok and status in ("erro", "cancelado"):
+                resultado_final["encerrado"] = True
+                lbl_status.config(text=f"Pagamento {status}.", fg="#b00020")
+                janela.after(1500, janela.destroy)
+                return
+            if not ok:
+                lbl_status.config(text=f"Verificando... ({status})", fg="#8a5a00")
+            janela.after(3000, verificar)
+
+        janela.after(1000, verificar)
+        self.wait_window(janela)
+        return resultado_final["aprovado"]
 
     def executar_finalizacao(self):
         if not self.carrinho:
@@ -304,11 +549,11 @@ class TelaPDV(tk.Frame):
             return
 
         forma = self.cb_pagamento.get()
-        total_venda = total_bruto_carrinho(self.carrinho)
+        total_bruto = total_bruto_carrinho(self.carrinho)
+        total_venda = round(total_bruto - self.desconto_venda_atual, 2)
 
-        try:
-            recebido = float(self.entry_recebido.get().replace(",", "."))
-        except ValueError:
+        recebido = parse_float(self.entry_recebido.get())
+        if recebido is None:
             messagebox.showerror("Erro", "Informe um valor recebido válido.")
             return
 
@@ -322,36 +567,61 @@ class TelaPDV(tk.Frame):
                 return
             troco = valor_troco
 
-        # Lógica para pagamento via PIX
+        # Lógica para pagamento via PIX — usa o orquestrador, que decide
+        # entre manual / automático / híbrido conforme configurado.
         elif forma == "PIX":
-            sucesso_pix, retorno_pix = gerar_qrcode_pix_para_venda(total_venda)
-            if not sucesso_pix:
+            resultado_pix = iniciar_cobranca(total_venda, f"Venda PDV - R$ {total_venda:.2f}")
+
+            if resultado_pix["modo_efetivo"] == "automatico" and resultado_pix["sucesso"]:
+                confirmado = self._acompanhar_pix_automatico(resultado_pix)
+                if not confirmado:
+                    return
+            elif resultado_pix["modo_efetivo"] == "automatico" and not resultado_pix["sucesso"]:
+                # Modo automático puro (sem híbrido) e o gateway falhou: não há
+                # contingência configurada, então a falha é exposta ao caixa.
                 messagebox.showerror(
-                    "Erro PIX", f"Não foi possível gerar o QR Code:\n{retorno_pix}"
+                    "Erro PIX",
+                    "Não foi possível gerar a cobrança automática:\n"
+                    f"{resultado_pix.get('motivo', '')}\n\n"
+                    "Configure o modo Híbrido para ter contingência automática, "
+                    "ou escolha outra forma de pagamento.",
                 )
                 return
+            else:
+                # Manual nativo OU contingência do híbrido — mesma UX para o caixa.
+                if not resultado_pix["sucesso"]:
+                    messagebox.showerror(
+                        "Erro PIX", f"Não foi possível gerar o QR Code:\n{resultado_pix.get('motivo', '')}"
+                    )
+                    return
 
-            # Abre o PDF automaticamente no leitor padrão do Windows
-            try:
-                os.startfile(retorno_pix)
-            except Exception:
-                messagebox.showinfo(
-                    "PIX Gerado", f"PDF do PIX gerado em:\n{retorno_pix}"
+                if resultado_pix.get("contingencia"):
+                    messagebox.showwarning(
+                        "Conexão automática indisponível",
+                        "Não foi possível confirmar a cobrança automática agora "
+                        f"({resultado_pix.get('motivo_contingencia', 'motivo não informado')}).\n\n"
+                        "Gerando Pix manual para conferência do caixa.",
+                    )
+
+                pdf_path = resultado_pix["pdf_path"]
+                try:
+                    os.startfile(pdf_path)
+                except Exception:
+                    messagebox.showinfo("PIX Gerado", f"PDF do PIX gerado em:\n{pdf_path}")
+
+                confirmacao = messagebox.askyesno(
+                    "Aguardando Pagamento",
+                    "O QR Code foi gerado e aberto.\n\nO pagamento foi confirmado no aplicativo do banco?",
                 )
-
-            # Trava a tela aguardando a confirmação do operador
-            confirmacao = messagebox.askyesno(
-                "Aguardando Pagamento",
-                "O QR Code foi gerado e aberto.\n\nO pagamento foi confirmado no aplicativo do banco?",
-            )
-
-            if not confirmacao:
-                messagebox.showinfo("Cancelado", "A finalização da venda foi suspensa.")
-                return
+                if not confirmacao:
+                    cancelar_cobranca(resultado_pix["referencia"])
+                    messagebox.showinfo("Cancelado", "A finalização da venda foi suspensa.")
+                    return
+                confirmar_recebimento_manual(resultado_pix["referencia"])
 
         # Processamento e persistência fiscal/venda no banco de dados
         sucesso, msg, dados = finalizar_venda(
-            self.carrinho, desconto_venda=0.0, forma_pagamento=forma, troco=troco
+            self.carrinho, desconto_venda=self.desconto_venda_atual, forma_pagamento=forma, troco=troco
         )
 
         if sucesso:
@@ -361,9 +631,71 @@ class TelaPDV(tk.Frame):
 
             messagebox.showinfo("Venda Concluída", msg_sucesso)
             self.carrinho = []
+            self.desconto_venda_atual = 0.0
             self.atualizar_visual_carrinho()
         else:
             messagebox.showerror("Erro de Processamento", msg)
+
+    def abrir_modal_sangria(self):
+        self._abrir_modal_movimentacao_caixa(
+            titulo="Sangria de Caixa",
+            cor="#FFA000",
+            funcao_registro=registrar_sangria,
+        )
+
+    def abrir_modal_suprimento(self):
+        self._abrir_modal_movimentacao_caixa(
+            titulo="Suprimento de Caixa",
+            cor="#7CB342",
+            funcao_registro=registrar_suprimento,
+        )
+
+    def _abrir_modal_movimentacao_caixa(self, titulo: str, cor: str, funcao_registro):
+        if not state.caixa_id:
+            messagebox.showwarning("Aviso", "Nenhum caixa aberto.")
+            return
+
+        janela = tk.Toplevel(self)
+        janela.title(titulo)
+        janela.geometry("380x260")
+        janela.transient(self.winfo_toplevel())
+        janela.grab_set()
+
+        tk.Label(janela, text=titulo, font=("Arial", 14, "bold"), fg=cor).pack(pady=(16, 10))
+
+        tk.Label(janela, text="Valor (R$):", font=("Arial", 11)).pack(anchor="w", padx=20)
+        entry_valor = tk.Entry(janela, font=("Arial", 13), justify="center")
+        entry_valor.pack(fill="x", padx=20, pady=(2, 10))
+        entry_valor.focus_set()
+
+        tk.Label(janela, text="Motivo:", font=("Arial", 11)).pack(anchor="w", padx=20)
+        entry_motivo = tk.Entry(janela, font=("Arial", 11))
+        entry_motivo.pack(fill="x", padx=20, pady=(2, 16))
+
+        def confirmar():
+            valor = parse_float(entry_valor.get())
+            if valor is None:
+                messagebox.showerror("Erro", "Informe um valor numérico válido.")
+                return
+            motivo = entry_motivo.get().strip()
+            sucesso, msg = funcao_registro(valor, motivo)
+            if not sucesso:
+                messagebox.showerror("Erro", msg)
+                return
+            messagebox.showinfo("Sucesso", msg)
+            janela.destroy()
+
+        tk.Button(
+            janela,
+            text="Confirmar",
+            font=("Arial", 11, "bold"),
+            bg=cor,
+            fg="white",
+            command=confirmar,
+        ).pack(fill="x", padx=20, pady=(0, 6))
+        tk.Button(janela, text="Cancelar", command=janela.destroy).pack(fill="x", padx=20)
+
+        janela.bind("<Return>", lambda e: confirmar())
 
     def executar_fechamento_caixa(self):
         resumo = resumo_fechamento_caixa()
@@ -376,6 +708,8 @@ class TelaPDV(tk.Frame):
             f"Fundo Inicial: R$ {resumo['fundo_troco']:.2f}\n"
             f"Qtd Vendas: {resumo['qtd_vendas']}\n"
             f"Total Geral Vendido: R$ {resumo['total_geral']:.2f}\n"
+            f"Sangrias: R$ {resumo['total_sangrias']:.2f}\n"
+            f"Suprimentos: R$ {resumo['total_suprimentos']:.2f}\n"
             f"Total Líquido Esperado em Caixa: R$ {resumo['total_em_caixa']:.2f}"
         )
 

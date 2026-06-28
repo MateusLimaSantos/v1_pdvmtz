@@ -42,9 +42,9 @@ def criar_cobranca_pix(
         "payment_method_id": "pix",
         "external_reference": referencia_externa,
         "payer": {
-            "email": "cliente-balcao@pdv.local",
-            "first_name": "Cliente",
-            "last_name": "Balcão",
+            "email": "mateuscomercialmtz@gmail.com",
+            "first_name": "Mateus",
+            "last_name": "Santos",
         },
     }
     headers = {

@@ -1,10 +1,11 @@
 import re
+import math
 import requests
 from datetime import datetime
 from pydantic import ValidationError
 
-from core.database import get_db_connection
-from core.models import EmitenteModel, validar_cnpj
+from backend.core.database import get_db_connection
+from backend.core.models import EmitenteModel, validar_cnpj
 
 # ─────────────────────────────────────────
 # HELPERS DE DATA / HORA
@@ -38,16 +39,21 @@ def _iso_de_br(data_br: str) -> str:
 
 
 def parse_float(raw: str) -> float | None:
-    """Converte texto de campo da GUI em float aceitando vírgula. None se inválido."""
+    """Converte texto de campo da GUI em float aceitando vírgula. None se inválido,
+    incluindo infinito (ex: '1e10000') e NaN, que float() aceita silenciosamente
+    mas corrompem cálculos financeiros (somas com inf nunca mais voltam a um número)."""
     if raw is None:
         return None
     raw = str(raw).strip().replace(",", ".")
     if not raw:
         return None
     try:
-        return float(raw)
+        valor = float(raw)
     except ValueError:
         return None
+    if not math.isfinite(valor):
+        return None
+    return valor
 
 
 # ─────────────────────────────────────────
@@ -132,19 +138,68 @@ def set_config(chave: str, valor):
 
 
 def buscar_endereco_por_cep(cep: str) -> dict | None:
-    """Consulta a API do ViaCEP e retorna o dicionário de endereço."""
+    """
+    Consulta o CEP em ViaCEP (primária) com fallback em BrasilAPI,
+    seguindo o padrão recomendado de não depender de uma única fonte.
+    Retorna um dict normalizado com as chaves:
+        logradouro, bairro, cidade, uf
+    ou None se o CEP for inválido, não encontrado em nenhuma fonte,
+    ou se não houver rede disponível — nunca lança exceção: o
+    autocompletar é um auxílio opcional, preenchimento manual sempre
+    continua possível.
+    """
     cep_limpo = re.sub(r"\D", "", cep)
     if len(cep_limpo) != 8:
         return None
+
+    resultado = _buscar_cep_viacep(cep_limpo)
+    if resultado:
+        return resultado
+    return _buscar_cep_brasilapi(cep_limpo)
+
+
+def _buscar_cep_viacep(cep_limpo: str) -> dict | None:
     try:
         r = requests.get(f"https://viacep.com.br/ws/{cep_limpo}/json/", timeout=5)
-        if r.status_code == 200:
-            dados = r.json()
-            if not dados.get("erro"):
-                return dados
-    except Exception:
-        pass
-    return None
+    except requests.exceptions.RequestException:
+        return None
+    if r.status_code != 200:
+        return None
+    try:
+        dados = r.json()
+    except ValueError:
+        return None
+    if dados.get("erro"):
+        return None
+    if not dados.get("logradouro") and not dados.get("bairro"):
+        return None
+    return {
+        "logradouro": dados.get("logradouro", ""),
+        "bairro": dados.get("bairro", ""),
+        "cidade": dados.get("localidade", ""),
+        "uf": dados.get("uf", ""),
+    }
+
+
+def _buscar_cep_brasilapi(cep_limpo: str) -> dict | None:
+    try:
+        r = requests.get(f"https://brasilapi.com.br/api/cep/v2/{cep_limpo}", timeout=5)
+    except requests.exceptions.RequestException:
+        return None
+    if r.status_code != 200:
+        return None
+    try:
+        dados = r.json()
+    except ValueError:
+        return None
+    if not dados.get("street") and not dados.get("neighborhood"):
+        return None
+    return {
+        "logradouro": dados.get("street", ""),
+        "bairro": dados.get("neighborhood", ""),
+        "cidade": dados.get("city", ""),
+        "uf": dados.get("state", ""),
+    }
 
 
 def get_dados_emitente(validar: bool = True) -> dict:

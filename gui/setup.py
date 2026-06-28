@@ -1,14 +1,15 @@
 import os
 import re
 import sqlite3
+import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, messagebox, filedialog
 
-from config import BASE_DIR, REPORTS_DIR, TIPOS_UNIDADE_VALIDOS
-from core.auth import _hash_senha
-from core.database import get_db_connection
-from core.configuracoes import (
+from backend.config import BASE_DIR, REPORTS_DIR, TIPOS_UNIDADE_VALIDOS
+from backend.core.auth import _hash_senha
+from backend.core.database import get_db_connection
+from backend.core.configuracoes import (
     salvar_dados_emitente,
     salvar_configuracao_pix,
     desativar_pix,
@@ -16,7 +17,7 @@ from core.configuracoes import (
     cartao_esta_ativo,
     marcar_setup_concluido,
 )
-from core.helpers import set_config
+from backend.core.helpers import set_config
 
 
 class SetupInicial:
@@ -31,6 +32,9 @@ class SetupInicial:
 
         self.vars: dict[str, tk.StringVar] = {}
         self.bool_vars: dict[str, tk.BooleanVar] = {}
+        self._entries_por_aba: dict[int, list[tk.Entry]] = {}
+        self._entries_por_chave: dict[str, tk.Entry] = {}
+        self._aba_atual_id = 0
 
         self._montar()
 
@@ -54,6 +58,8 @@ class SetupInicial:
         scroll.pack(side="right", fill="y")
 
         notebook.add(outer, text=titulo)
+        self._entries_por_aba[id(frame)] = []
+        self._frame_aba_atual = frame
         return frame
 
     def _titulo_secao(self, parent, texto: str, row: int):
@@ -80,7 +86,20 @@ class SetupInicial:
         ent = tk.Entry(parent, textvariable=var, width=width, show=show)
         ent.grid(row=row, column=1, sticky="ew", pady=4, padx=4)
         self.vars[chave] = var
+        self._entries_por_chave[chave] = ent
+        self._registrar_entry_na_aba(parent, ent)
         return ent
+
+    def _registrar_entry_na_aba(self, parent, entry: tk.Entry):
+        """Associa o entry à lista de campos navegáveis por Enter da
+        aba em que ele foi criado. parent é o frame retornado por
+        _aba_scroll (ou um descendente direto dele, no caso comum)."""
+        chave_aba = id(parent)
+        if chave_aba not in self._entries_por_aba:
+            # parent pode ser um sub-frame; usamos a última aba aberta
+            # como destino, que é o caso de uso real deste assistente.
+            chave_aba = id(self._frame_aba_atual)
+        self._entries_por_aba.setdefault(chave_aba, []).append(entry)
 
     def _combo(
         self,
@@ -93,12 +112,23 @@ class SetupInicial:
     ):
         tk.Label(parent, text=label).grid(row=row, column=0, sticky="w", pady=4, padx=4)
         var = tk.StringVar(value=default)
-        combo = ttk.Combobox(parent, textvariable=var, values=values, state="readonly", width=40)
+        combo = ttk.Combobox(
+            parent, textvariable=var, values=values, state="readonly", width=40
+        )
         combo.grid(row=row, column=1, sticky="ew", pady=4, padx=4)
         self.vars[chave] = var
         return combo
 
-    def _check(self, parent, label: str, chave: str, row: int, *, default: bool = False, state: str = "normal"):
+    def _check(
+        self,
+        parent,
+        label: str,
+        chave: str,
+        row: int,
+        *,
+        default: bool = False,
+        state: str = "normal",
+    ):
         var = tk.BooleanVar(value=default)
         chk = tk.Checkbutton(parent, text=label, variable=var, state=state)
         chk.grid(row=row, column=0, columnspan=3, sticky="w", pady=4, padx=4)
@@ -118,15 +148,15 @@ class SetupInicial:
 
     def _campo_pasta(self, parent, label: str, chave: str, row: int, default: str):
         self._campo(parent, label, chave, row, default=default, width=54)
-        tk.Button(parent, text="Procurar", command=lambda: self._browse_dir(chave)).grid(
-            row=row, column=2, sticky="w", padx=4
-        )
+        tk.Button(
+            parent, text="Procurar", command=lambda: self._browse_dir(chave)
+        ).grid(row=row, column=2, sticky="w", padx=4)
 
     def _campo_arquivo(self, parent, label: str, chave: str, row: int):
         self._campo(parent, label, chave, row, width=54)
-        tk.Button(parent, text="Procurar", command=lambda: self._browse_file(chave)).grid(
-            row=row, column=2, sticky="w", padx=4
-        )
+        tk.Button(
+            parent, text="Procurar", command=lambda: self._browse_file(chave)
+        ).grid(row=row, column=2, sticky="w", padx=4)
 
     def _montar(self):
         tk.Label(
@@ -152,9 +182,24 @@ class SetupInicial:
         self._montar_impressao_backup(self._aba_scroll(notebook, "PDF/Backup"))
         self._montar_painel_admin(self._aba_scroll(notebook, "Painel Admin"))
 
+        self._notebook = notebook
+        self._encadear_enters_por_aba()
+
+        self._configurar_autocomplete_cep(
+            entry_cep=self._entry_por_chave("cep"),
+            campos_destino={
+                "logradouro": self._entry_por_chave("logradouro"),
+                "bairro": self._entry_por_chave("bairro"),
+                "municipio": self._entry_por_chave("municipio"),
+                "uf": self._entry_por_chave("uf"),
+            },
+        )
+
         rodape = tk.Frame(self.root)
         rodape.pack(fill="x", padx=18, pady=(4, 16))
-        tk.Button(rodape, text="Cancelar", command=self.root.destroy, width=16).pack(side="right", padx=6)
+        tk.Button(rodape, text="Cancelar", command=self.root.destroy, width=16).pack(
+            side="right", padx=6
+        )
         tk.Button(
             rodape,
             text="Salvar configuracao",
@@ -202,16 +247,44 @@ class SetupInicial:
         ).grid(row=4, column=0, columnspan=3, sticky="w", pady=10)
 
         self._titulo_secao(aba, "Permissoes iniciais", 5)
-        self._check(aba, "Operadores comuns podem vender", "perm_operador_vender", 6, default=True)
-        self._check(aba, "Cancelamento de venda apenas para administrador", "perm_cancelamento_admin", 7, default=True)
-        self._check(aba, "Ajuste de estoque apenas para administrador", "perm_estoque_admin", 8, default=True)
-        self._campo(aba, "Desconto maximo do operador comum (%)", "desconto_operador_max", 9, default="10")
+        self._check(
+            aba,
+            "Operadores comuns podem vender",
+            "perm_operador_vender",
+            6,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Cancelamento de venda apenas para administrador",
+            "perm_cancelamento_admin",
+            7,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Ajuste de estoque apenas para administrador",
+            "perm_estoque_admin",
+            8,
+            default=True,
+        )
+        self._campo(
+            aba,
+            "Desconto maximo do operador comum (%)",
+            "desconto_operador_max",
+            9,
+            default="10",
+        )
 
     def _montar_pagamentos(self, aba):
         aba.columnconfigure(1, weight=1)
         self._titulo_secao(aba, "PIX", 0)
-        self._check(aba, "Ativar PIX manual nesta versao", "pix_ativo", 1, default=False)
-        self._combo(aba, "Tipo da chave PIX", "pix_tipo", 2, ("1", "2", "3", "4", "5"), "4")
+        self._check(
+            aba, "Ativar PIX manual nesta versao", "pix_ativo", 1, default=False
+        )
+        self._combo(
+            aba, "Tipo da chave PIX", "pix_tipo", 2, ("1", "2", "3", "4", "5"), "4"
+        )
         self._campo(aba, "Chave PIX", "pix_chave", 3)
         self._campo(aba, "Banco/instituicao", "pix_banco", 4)
         self._campo(aba, "Nome do titular", "pix_nome", 5)
@@ -233,7 +306,13 @@ class SetupInicial:
             default=False,
             state="disabled",
         )
-        self._check(aba, "Permitir registro manual de venda em cartao no futuro", "cartao_manual_futuro", 9, default=True)
+        self._check(
+            aba,
+            "Permitir registro manual de venda em cartao no futuro",
+            "cartao_manual_futuro",
+            9,
+            default=True,
+        )
         tk.Label(
             aba,
             text="Nesta etapa, a maquininha fica externa e a confirmacao sera manual quando o recurso for liberado.",
@@ -250,13 +329,33 @@ class SetupInicial:
             "Modo de emissao",
             "modo_fiscal",
             1,
-            ("simulado", "nfce_homologacao_em_desenvolvimento", "nfce_producao_em_desenvolvimento"),
+            (
+                "simulado",
+                "nfce_homologacao_em_desenvolvimento",
+                "nfce_producao_em_desenvolvimento",
+            ),
             "simulado",
         )
-        self._campo_arquivo(aba, "Certificado digital A1/PFX (futuro)", "certificado_pfx", 2)
-        self._campo(aba, "Senha do certificado (futuro)", "certificado_senha", 3, show="*")
-        self._check(aba, "Gerar cupom/PDF interno apos venda", "fiscal_gerar_cupom_pdf", 4, default=True)
-        self._check(aba, "Exibir aviso de documento nao fiscal no modo simulado", "fiscal_aviso_simulado", 5, default=True)
+        self._campo_arquivo(
+            aba, "Certificado digital A1/PFX (futuro)", "certificado_pfx", 2
+        )
+        self._campo(
+            aba, "Senha do certificado (futuro)", "certificado_senha", 3, show="*"
+        )
+        self._check(
+            aba,
+            "Gerar cupom/PDF interno apos venda",
+            "fiscal_gerar_cupom_pdf",
+            4,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Exibir aviso de documento nao fiscal no modo simulado",
+            "fiscal_aviso_simulado",
+            5,
+            default=True,
+        )
         tk.Label(
             aba,
             text=(
@@ -271,17 +370,71 @@ class SetupInicial:
     def _montar_pdv_estoque(self, aba):
         aba.columnconfigure(1, weight=1)
         self._titulo_secao(aba, "Comportamento do PDV", 0)
-        self._check(aba, "Abrir o PDV logo apos o login", "pdv_abrir_apos_login", 1, default=True)
-        self._check(aba, "Bloquear venda quando nao houver produto cadastrado", "pdv_bloquear_sem_produtos", 2, default=True)
-        self._check(aba, "Perguntar se o pagamento foi confirmado antes de finalizar", "pdv_confirmar_pagamento", 3, default=True)
-        self._check(aba, "Perguntar se o cliente quer impressao/PDF do cupom", "pdv_perguntar_impressao", 4, default=True)
-        self._check(aba, "Ativar atalhos F1-F12 e teclado numerico", "pdv_atalhos_ativos", 5, default=True)
+        self._check(
+            aba,
+            "Abrir o PDV logo apos o login",
+            "pdv_abrir_apos_login",
+            1,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Bloquear venda quando nao houver produto cadastrado",
+            "pdv_bloquear_sem_produtos",
+            2,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Perguntar se o pagamento foi confirmado antes de finalizar",
+            "pdv_confirmar_pagamento",
+            3,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Perguntar se o cliente quer impressao/PDF do cupom",
+            "pdv_perguntar_impressao",
+            4,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Ativar atalhos F1-F12 e teclado numerico",
+            "pdv_atalhos_ativos",
+            5,
+            default=True,
+        )
 
         self._titulo_secao(aba, "Estoque e unidades", 6)
-        self._check(aba, "Bloquear estoque negativo", "estoque_bloquear_negativo", 7, default=True)
-        self._check(aba, "Permitir embalagens/fardos vinculados ao produto base", "estoque_embalagens_ativas", 8, default=True)
-        self._check(aba, "Permitir entrada manual de estoque", "estoque_entrada_manual", 9, default=True)
-        self._check(aba, "Permitir importacao de XML de compra", "estoque_importar_xml", 10, default=True)
+        self._check(
+            aba,
+            "Bloquear estoque negativo",
+            "estoque_bloquear_negativo",
+            7,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Permitir embalagens/fardos vinculados ao produto base",
+            "estoque_embalagens_ativas",
+            8,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Permitir entrada manual de estoque",
+            "estoque_entrada_manual",
+            9,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Permitir importacao de XML de compra",
+            "estoque_importar_xml",
+            10,
+            default=True,
+        )
         self._campo(
             aba,
             "Unidades ativas",
@@ -300,25 +453,85 @@ class SetupInicial:
     def _montar_impressao_backup(self, aba):
         aba.columnconfigure(1, weight=1)
         self._titulo_secao(aba, "PDF e impressao", 0)
-        self._campo_pasta(aba, "Pasta de PDFs/relatorios", "reports_dir", 1, REPORTS_DIR)
-        self._check(aba, "Gerar PDF automaticamente apos finalizar venda", "impressao_gerar_pdf", 2, default=True)
-        self._check(aba, "Abrir PDF automaticamente apos gerar", "impressao_abrir_pdf", 3, default=False)
-        self._check(aba, "Imprimir automaticamente (futuro)", "impressao_auto_em_desenvolvimento", 4, default=False, state="disabled")
+        self._campo_pasta(
+            aba, "Pasta de PDFs/relatorios", "reports_dir", 1, REPORTS_DIR
+        )
+        self._check(
+            aba,
+            "Gerar PDF automaticamente apos finalizar venda",
+            "impressao_gerar_pdf",
+            2,
+            default=True,
+        )
+        self._check(
+            aba,
+            "Abrir PDF automaticamente apos gerar",
+            "impressao_abrir_pdf",
+            3,
+            default=False,
+        )
+        self._check(
+            aba,
+            "Imprimir automaticamente (futuro)",
+            "impressao_auto_em_desenvolvimento",
+            4,
+            default=False,
+            state="disabled",
+        )
 
         self._titulo_secao(aba, "Backup", 5)
-        self._campo_pasta(aba, "Pasta de backups", "backup_dir", 6, os.path.join(BASE_DIR, "backups"))
-        self._combo(aba, "Periodicidade", "backup_periodicidade", 7, ("manual", "diario", "semanal"), "diario")
-        self._campo(aba, "Manter backups por quantos dias", "backup_manter_dias", 8, default="30")
-        self._check(aba, "Fazer backup ao fechar o sistema (futuro)", "backup_ao_fechar", 9, default=True)
+        self._campo_pasta(
+            aba, "Pasta de backups", "backup_dir", 6, os.path.join(BASE_DIR, "backups")
+        )
+        self._combo(
+            aba,
+            "Periodicidade",
+            "backup_periodicidade",
+            7,
+            ("manual", "diario", "semanal"),
+            "diario",
+        )
+        self._campo(
+            aba,
+            "Manter backups por quantos dias",
+            "backup_manter_dias",
+            8,
+            default="30",
+        )
+        self._check(
+            aba,
+            "Fazer backup ao fechar o sistema (futuro)",
+            "backup_ao_fechar",
+            9,
+            default=True,
+        )
 
     def _montar_painel_admin(self, aba):
         self._titulo_secao(aba, "Modulos visiveis para administrador", 0)
         self._check(aba, "Fornecedores", "admin_mod_fornecedores", 1, default=True)
-        self._check(aba, "Operadores e permissoes", "admin_mod_operadores", 2, default=True)
-        self._check(aba, "Historico de vendas e cupons/PDFs", "admin_mod_historico", 3, default=True)
-        self._check(aba, "Graficos de vendas mensal", "admin_mod_graficos", 4, default=True)
-        self._check(aba, "Caixa: abertura, fechamento, sangria e suprimento", "admin_mod_caixa", 5, default=True)
-        self._check(aba, "Auditoria de alteracoes", "admin_mod_auditoria", 6, default=True)
+        self._check(
+            aba, "Operadores e permissoes", "admin_mod_operadores", 2, default=True
+        )
+        self._check(
+            aba,
+            "Historico de vendas e cupons/PDFs",
+            "admin_mod_historico",
+            3,
+            default=True,
+        )
+        self._check(
+            aba, "Graficos de vendas mensal", "admin_mod_graficos", 4, default=True
+        )
+        self._check(
+            aba,
+            "Caixa: abertura, fechamento, sangria e suprimento",
+            "admin_mod_caixa",
+            5,
+            default=True,
+        )
+        self._check(
+            aba, "Auditoria de alteracoes", "admin_mod_auditoria", 6, default=True
+        )
         tk.Label(
             aba,
             text="Essas opcoes ficam salvas para orientar a proxima etapa: construir o painel interno do administrador.",
@@ -326,6 +539,108 @@ class SetupInicial:
             wraplength=760,
             justify="left",
         ).grid(row=7, column=0, columnspan=3, sticky="w", pady=10)
+
+    def _encadear_enters_por_aba(self):
+        """
+        Faz Enter avançar para o próximo campo de texto dentro da
+        mesma aba (ordenado pela linha do grid). No último campo de
+        uma aba, Enter avança para a primeira aba seguinte que tiver
+        algum campo; na última aba, Enter aciona 'Salvar configuração'.
+        Campos desabilitados (Entry com state='disabled') são pulados.
+        """
+        abas_ids_em_ordem = list(self._entries_por_aba.keys())
+
+        listas_ordenadas: list[list[tk.Entry]] = []
+        for chave_aba in abas_ids_em_ordem:
+            entries = self._entries_por_aba[chave_aba]
+            entries_validos = [e for e in entries if str(e.cget("state")) != "disabled"]
+            entries_ordenados = sorted(
+                entries_validos, key=lambda e: e.grid_info().get("row", 0)
+            )
+            listas_ordenadas.append(entries_ordenados)
+
+        for i, entries_aba in enumerate(listas_ordenadas):
+            for pos, entry in enumerate(entries_aba):
+                if pos + 1 < len(entries_aba):
+                    proximo = entries_aba[pos + 1]
+                    entry.bind(
+                        "<Return>", lambda e, prox=proximo: (prox.focus_set(), "break")
+                    )
+                else:
+                    # Último campo da aba: pula para a próxima aba com
+                    # campos, ou aciona salvar se for a última de todas.
+                    proxima_aba_com_campos = None
+                    for j in range(i + 1, len(listas_ordenadas)):
+                        if listas_ordenadas[j]:
+                            proxima_aba_com_campos = (j, listas_ordenadas[j][0])
+                            break
+                    if proxima_aba_com_campos:
+                        idx_aba, primeiro_campo = proxima_aba_com_campos
+                        entry.bind(
+                            "<Return>",
+                            lambda e, idx=idx_aba, campo=primeiro_campo: self._ir_para_aba_e_focar(
+                                idx, campo
+                            ),
+                        )
+                    else:
+                        entry.bind("<Return>", lambda e: (self._salvar(), "break"))
+
+    def _ir_para_aba_e_focar(self, indice_aba: int, campo: tk.Entry):
+        self._notebook.select(indice_aba)
+        campo.focus_set()
+        return "break"
+
+    def _entry_por_chave(self, chave: str) -> tk.Entry | None:
+        return self._entries_por_chave.get(chave)
+
+    def _configurar_autocomplete_cep(
+        self, entry_cep: tk.Entry | None, campos_destino: dict[str, tk.Entry | None]
+    ):
+        """
+        Ao sair do campo CEP (perder o foco) ou apertar Enter nele,
+        consulta o endereço numa thread separada (para não congelar a
+        janela enquanto espera a rede) e preenche automaticamente
+        logradouro/bairro/município/UF. Nunca sobrescreve o que o
+        usuário já tiver digitado manualmente nesses campos — só
+        preenche os que estiverem vazios. O número nunca é preenchido
+        automaticamente, é sempre digitado pelo usuário.
+        """
+        if entry_cep is None:
+            return
+
+        def disparar_busca(_event=None):
+            cep_texto = entry_cep.get().strip()
+            cep_limpo = re.sub(r"\D", "", cep_texto)
+            if len(cep_limpo) != 8:
+                return
+
+            def buscar_em_thread():
+                from backend.core.helpers import buscar_endereco_por_cep
+
+                resultado = buscar_endereco_por_cep(cep_limpo)
+                self.root.after(0, lambda: aplicar_resultado(resultado))
+
+            def aplicar_resultado(resultado: dict | None):
+                if not resultado:
+                    return
+                mapa = {
+                    "logradouro": resultado.get("logradouro", ""),
+                    "bairro": resultado.get("bairro", ""),
+                    "municipio": resultado.get("cidade", ""),
+                    "uf": resultado.get("uf", ""),
+                }
+                for chave, valor in mapa.items():
+                    campo = campos_destino.get(chave)
+                    if campo is None or not valor:
+                        continue
+                    if not campo.get().strip():  # só preenche se ainda estiver vazio
+                        campo.delete(0, tk.END)
+                        campo.insert(0, valor)
+
+            threading.Thread(target=buscar_em_thread, daemon=True).start()
+
+        entry_cep.bind("<FocusOut>", disparar_busca)
+        entry_cep.bind("<Return>", lambda e: disparar_busca(), add="+")
 
     def _valor(self, chave: str) -> str:
         return self.vars[chave].get().strip()
@@ -402,7 +717,11 @@ class SetupInicial:
         if not (1 <= manter_dias <= 3650):
             return False, "Dias de retencao de backup deve ficar entre 1 e 3650."
 
-        unidades = [u.strip() for u in self._valor("estoque_unidades_ativas").split(",") if u.strip()]
+        unidades = [
+            u.strip()
+            for u in self._valor("estoque_unidades_ativas").split(",")
+            if u.strip()
+        ]
         invalidas = [u for u in unidades if u not in TIPOS_UNIDADE_VALIDOS]
         if invalidas:
             return False, f"Unidades invalidas: {', '.join(invalidas)}."
@@ -411,13 +730,18 @@ class SetupInicial:
 
         modo_fiscal = self._valor("modo_fiscal")
         if modo_fiscal != "simulado":
-            return False, "Apenas o modo fiscal 'simulado' esta operacional nesta versao."
+            return (
+                False,
+                "Apenas o modo fiscal 'simulado' esta operacional nesta versao.",
+            )
 
         return True, ""
 
     def _salvar_configs_operacionais(self):
         configs_texto = {
-            "desconto_operador_max": self._valor("desconto_operador_max").replace(",", "."),
+            "desconto_operador_max": self._valor("desconto_operador_max").replace(
+                ",", "."
+            ),
             "modo_fiscal": self._valor("modo_fiscal"),
             "certificado_pfx": self._valor("certificado_pfx"),
             "reports_dir": self._valor("reports_dir"),

@@ -16,14 +16,12 @@ env/
 .codex_backups/
 data/*.db
 data/*.db-*
-data/.chave_local
 data/xmls_nfe/
 reports/
 backups/
 
 # Arquivos gerados pelo esboco
 tudo.txt
-agrupar_codigo.py
 _temp_*.png
 
 # IDE / SO

@@ -16,11 +16,10 @@ Estratégia (Tkinter não tem tema nativo — ver discussão no projeto):
    para que alternar o tema em tempo real funcione sem reiniciar
    a tela atual.
 """
-
 import tkinter as tk
 from tkinter import ttk
 
-from core.helpers import get_config, set_config
+from backend.core.helpers import get_config, set_config
 
 CLARO = {
     "fundo": "#f5f5f5",
@@ -122,45 +121,26 @@ def _configurar_estilo_ttk(root: tk.Tk, t: dict):
     via ttk.Style, que é o mecanismo correto para esses widgets."""
     style = ttk.Style(root)
     try:
-        style.theme_use(
-            "clam"
-        )  # tema base que aceita customização de cores em todas plataformas
+        style.theme_use("clam")  # tema base que aceita customização de cores em todas plataformas
     except tk.TclError:
         pass
 
-    style.configure(
-        "Treeview",
-        background=t["treeview_fundo"],
-        foreground=t["treeview_texto"],
-        fieldbackground=t["treeview_fundo"],
-        bordercolor=t["borda"],
-    )
-    style.configure(
-        "Treeview.Heading",
-        background=t["treeview_cabecalho_fundo"],
-        foreground=t["texto"],
-    )
+    style.configure("Treeview", background=t["treeview_fundo"], foreground=t["treeview_texto"],
+                     fieldbackground=t["treeview_fundo"], bordercolor=t["borda"])
+    style.configure("Treeview.Heading", background=t["treeview_cabecalho_fundo"], foreground=t["texto"])
     style.map("Treeview", background=[("selected", t["selecao_fundo"])])
 
-    style.configure(
-        "TCombobox",
-        fieldbackground=t["entrada_fundo"],
-        background=t["entrada_fundo"],
-        foreground=t["entrada_texto"],
-    )
+    style.configure("TCombobox", fieldbackground=t["entrada_fundo"], background=t["entrada_fundo"],
+                     foreground=t["entrada_texto"])
     style.map("TCombobox", fieldbackground=[("readonly", t["entrada_fundo"])])
 
     style.configure("TNotebook", background=t["fundo"], bordercolor=t["borda"])
-    style.configure(
-        "TNotebook.Tab", background=t["botao_neutro_fundo"], foreground=t["texto"]
-    )
+    style.configure("TNotebook.Tab", background=t["botao_neutro_fundo"], foreground=t["texto"])
     style.map("TNotebook.Tab", background=[("selected", t["fundo_alt"])])
 
     style.configure("TFrame", background=t["fundo"])
     style.configure("TLabel", background=t["fundo"], foreground=t["texto"])
-    style.configure(
-        "TScrollbar", background=t["botao_neutro_fundo"], troughcolor=t["fundo"]
-    )
+    style.configure("TScrollbar", background=t["botao_neutro_fundo"], troughcolor=t["fundo"])
 
 
 def repintar_widget(widget, t: dict | None = None):
@@ -182,34 +162,15 @@ def repintar_widget(widget, t: dict | None = None):
         t = tema_atual()
 
     cores_neutras_fundo = {
-        CLARO["fundo"],
-        CLARO["fundo_alt"],
-        CLARO["botao_neutro_fundo"],
-        ESCURO["fundo"],
-        ESCURO["fundo_alt"],
-        ESCURO["botao_neutro_fundo"],
-        "#e0e0e0",
-        "#cfd8dc",  # cores de botão neutro usadas no código legado das telas
+        CLARO["fundo"], CLARO["fundo_alt"], CLARO["botao_neutro_fundo"],
+        ESCURO["fundo"], ESCURO["fundo_alt"], ESCURO["botao_neutro_fundo"],
+        "#e0e0e0", "#cfd8dc",  # cores de botão neutro usadas no código legado das telas
     }
     cores_neutras_texto = {
-        CLARO["texto"],
-        CLARO["botao_neutro_texto"],
-        ESCURO["texto"],
-        ESCURO["botao_neutro_texto"],
-        "black",
-        "#000000",
-        "#212121",
-        "#333",
-        "#333333",
-        "#555",
-        "#555555",  # textos/títulos neutros do código legado
+        CLARO["texto"], CLARO["botao_neutro_texto"], ESCURO["texto"], ESCURO["botao_neutro_texto"],
+        "black", "#000000", "#212121", "#333", "#333333", "#555", "#555555",  # textos/títulos neutros do código legado
     }
-    cores_neutras_entrada = {
-        CLARO["entrada_fundo"],
-        ESCURO["entrada_fundo"],
-        "white",
-        "#ffffff",
-    }
+    cores_neutras_entrada = {CLARO["entrada_fundo"], ESCURO["entrada_fundo"], "white", "#ffffff"}
 
     classe = widget.winfo_class()
 
@@ -221,50 +182,26 @@ def repintar_widget(widget, t: dict | None = None):
         elif classe == "Label":
             atual_bg = str(widget.cget("background"))
             atual_fg = str(widget.cget("foreground"))
-            if (
-                atual_bg.lower() in {c.lower() for c in cores_neutras_fundo}
-                or atual_bg == ""
-            ):
+            if atual_bg.lower() in {c.lower() for c in cores_neutras_fundo} or atual_bg == "":
                 widget.configure(background=t["fundo"])
-            if (
-                atual_fg.lower() in {c.lower() for c in cores_neutras_texto}
-                or atual_fg == ""
-            ):
+            if atual_fg.lower() in {c.lower() for c in cores_neutras_texto} or atual_fg == "":
                 widget.configure(foreground=t["texto"])
         elif classe == "Button":
             atual_bg = str(widget.cget("background"))
-            if (
-                atual_bg.lower() in {c.lower() for c in cores_neutras_fundo}
-                or atual_bg == ""
-            ):
-                widget.configure(
-                    background=t["botao_neutro_fundo"],
-                    foreground=t["botao_neutro_texto"],
-                )
+            if atual_bg.lower() in {c.lower() for c in cores_neutras_fundo} or atual_bg == "":
+                widget.configure(background=t["botao_neutro_fundo"], foreground=t["botao_neutro_texto"])
             # Botões com cor semântica (verde/vermelho/laranja/azul) mantêm
             # o fundo, mas o texto branco continua correto nos dois temas.
         elif classe == "Entry":
             atual_bg = str(widget.cget("background"))
-            if (
-                atual_bg.lower() in {c.lower() for c in cores_neutras_entrada}
-                or atual_bg == ""
-            ):
-                widget.configure(
-                    background=t["entrada_fundo"],
-                    foreground=t["entrada_texto"],
-                    insertbackground=t["entrada_texto"],
-                )
+            if atual_bg.lower() in {c.lower() for c in cores_neutras_entrada} or atual_bg == "":
+                widget.configure(background=t["entrada_fundo"], foreground=t["entrada_texto"],
+                                  insertbackground=t["entrada_texto"])
         elif classe == "Checkbutton":
-            widget.configure(
-                background=t["fundo"],
-                foreground=t["texto"],
-                selectcolor=t["entrada_fundo"],
-                activebackground=t["fundo"],
-            )
+            widget.configure(background=t["fundo"], foreground=t["texto"],
+                              selectcolor=t["entrada_fundo"], activebackground=t["fundo"])
         elif classe == "Listbox":
-            widget.configure(
-                background=t["entrada_fundo"], foreground=t["entrada_texto"]
-            )
+            widget.configure(background=t["entrada_fundo"], foreground=t["entrada_texto"])
     except tk.TclError:
         pass  # widget pode não suportar a opção (ex: separador) — ignora
 

@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from core.fornecedores import (
+from backend.core.fornecedores import (
     cadastrar_fornecedor,
     listar_fornecedores,
     atualizar_fornecedor,
@@ -49,19 +49,13 @@ class TelaFornecedores(tk.Frame):
         larguras = {"id": 50, "cnpj": 150, "nome": 280, "email": 200, "telefone": 130}
         for col in colunas:
             self.tree.heading(col, text=titulos[col])
-            self.tree.column(
-                col,
-                width=larguras[col],
-                anchor="w" if col in ("nome", "email") else "center",
-            )
+            self.tree.column(col, width=larguras[col], anchor="w" if col in ("nome", "email") else "center")
         self.tree.pack(fill="both", expand=True, pady=(0, 10))
         self.tree.bind("<<TreeviewSelect>>", self._ao_selecionar)
 
         acoes = tk.Frame(self)
         acoes.pack(fill="x", pady=(0, 16))
-        tk.Button(acoes, text="Atualizar lista", command=self.carregar_dados).pack(
-            side="left", padx=(0, 8)
-        )
+        tk.Button(acoes, text="Atualizar lista", command=self.carregar_dados).pack(side="left", padx=(0, 8))
         tk.Button(
             acoes,
             text="Excluir selecionado",
@@ -70,9 +64,7 @@ class TelaFornecedores(tk.Frame):
             fg="white",
         ).pack(side="left")
 
-        form = tk.LabelFrame(
-            self, text="Cadastrar / Editar fornecedor", padx=12, pady=12
-        )
+        form = tk.LabelFrame(self, text="Cadastrar / Editar fornecedor", padx=12, pady=12)
         form.pack(fill="x")
         form.columnconfigure(1, weight=1)
 
@@ -80,9 +72,7 @@ class TelaFornecedores(tk.Frame):
         self.entry_cnpj = tk.Entry(form, width=40)
         self.entry_cnpj.grid(row=0, column=1, sticky="w", padx=4, pady=4)
 
-        tk.Label(form, text="Razão Social").grid(
-            row=1, column=0, sticky="w", padx=4, pady=4
-        )
+        tk.Label(form, text="Razão Social").grid(row=1, column=0, sticky="w", padx=4, pady=4)
         self.entry_nome = tk.Entry(form, width=50)
         self.entry_nome.grid(row=1, column=1, sticky="ew", padx=4, pady=4)
 
@@ -90,25 +80,17 @@ class TelaFornecedores(tk.Frame):
         self.entry_email = tk.Entry(form, width=50)
         self.entry_email.grid(row=2, column=1, sticky="ew", padx=4, pady=4)
 
-        tk.Label(form, text="Telefone").grid(
-            row=3, column=0, sticky="w", padx=4, pady=4
-        )
+        tk.Label(form, text="Telefone").grid(row=3, column=0, sticky="w", padx=4, pady=4)
         self.entry_telefone = tk.Entry(form, width=30)
         self.entry_telefone.grid(row=3, column=1, sticky="w", padx=4, pady=4)
 
         botoes_form = tk.Frame(form)
         botoes_form.grid(row=4, column=1, sticky="e", pady=(10, 0))
         self.btn_salvar = tk.Button(
-            botoes_form,
-            text="Cadastrar fornecedor",
-            command=self._salvar,
-            bg="#2e7d32",
-            fg="white",
+            botoes_form, text="Cadastrar fornecedor", command=self._salvar, bg="#2e7d32", fg="white"
         )
         self.btn_salvar.pack(side="left", padx=(0, 8))
-        tk.Button(
-            botoes_form, text="Limpar formulário", command=self._limpar_form
-        ).pack(side="left")
+        tk.Button(botoes_form, text="Limpar formulário", command=self._limpar_form).pack(side="left")
 
     def carregar_dados(self):
         for row in self.tree.get_children():
@@ -149,12 +131,7 @@ class TelaFornecedores(tk.Frame):
     def _limpar_form(self):
         self.fornecedor_em_edicao_id = None
         self.entry_cnpj.config(state="normal")
-        for entry in (
-            self.entry_cnpj,
-            self.entry_nome,
-            self.entry_email,
-            self.entry_telefone,
-        ):
+        for entry in (self.entry_cnpj, self.entry_nome, self.entry_email, self.entry_telefone):
             entry.delete(0, "end")
         self.btn_salvar.config(text="Cadastrar fornecedor")
         self.tree.selection_remove(self.tree.selection())
@@ -168,9 +145,7 @@ class TelaFornecedores(tk.Frame):
             cnpj = self.entry_cnpj.get().strip()
             ok, msg = cadastrar_fornecedor(cnpj, nome, email, telefone)
         else:
-            ok, msg = atualizar_fornecedor(
-                self.fornecedor_em_edicao_id, nome, email, telefone
-            )
+            ok, msg = atualizar_fornecedor(self.fornecedor_em_edicao_id, nome, email, telefone)
 
         if not ok:
             messagebox.showerror("Fornecedores", msg)
@@ -187,8 +162,7 @@ class TelaFornecedores(tk.Frame):
         fornecedor_id = int(sel[0])
         nome = self.tree.item(sel[0], "values")[2]
         if not messagebox.askyesno(
-            "Confirmar exclusão",
-            f"Excluir o fornecedor '{nome}'? Esta ação não pode ser desfeita.",
+            "Confirmar exclusão", f"Excluir o fornecedor '{nome}'? Esta ação não pode ser desfeita."
         ):
             return
         ok, msg = excluir_fornecedor(fornecedor_id)

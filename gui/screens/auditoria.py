@@ -1,11 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 
-from core.auditoria import (
-    listar_auditoria,
-    listar_entidades_distintas,
-    listar_acoes_distintas,
-)
+from backend.core.auditoria import listar_auditoria, listar_entidades_distintas, listar_acoes_distintas
 
 
 class TelaAuditoria(tk.Frame):
@@ -64,25 +60,11 @@ class TelaAuditoria(tk.Frame):
         self.entry_operador.pack(side="left", padx=(0, 10))
 
         tk.Button(
-            filtros,
-            text="Filtrar",
-            command=self.carregar_dados,
-            bg="#1976D2",
-            fg="white",
+            filtros, text="Filtrar", command=self.carregar_dados, bg="#1976D2", fg="white"
         ).pack(side="left", padx=(0, 6))
-        tk.Button(filtros, text="Limpar", command=self._limpar_filtros).pack(
-            side="left"
-        )
+        tk.Button(filtros, text="Limpar", command=self._limpar_filtros).pack(side="left")
 
-        colunas = (
-            "data",
-            "operador",
-            "acao",
-            "entidade",
-            "id_entidade",
-            "status",
-            "detalhes",
-        )
+        colunas = ("data", "operador", "acao", "entidade", "id_entidade", "status", "detalhes")
         self.tree = ttk.Treeview(self, columns=colunas, show="headings", height=20)
         titulos = {
             "data": "Data/Hora",
@@ -94,13 +76,8 @@ class TelaAuditoria(tk.Frame):
             "detalhes": "Detalhes",
         }
         larguras = {
-            "data": 130,
-            "operador": 130,
-            "acao": 130,
-            "entidade": 100,
-            "id_entidade": 70,
-            "status": 80,
-            "detalhes": 320,
+            "data": 130, "operador": 130, "acao": 130, "entidade": 100,
+            "id_entidade": 70, "status": 80, "detalhes": 320,
         }
         for col in colunas:
             self.tree.heading(col, text=titulos[col])

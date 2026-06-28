@@ -1,13 +1,14 @@
 import re
 from pydantic import ValidationError
 
-from core.helpers import (
+from backend.core.helpers import (
     get_config,
     set_config,
     get_dados_emitente,
     buscar_endereco_por_cep,
 )
-from core.models import EmitenteModel
+from backend.core.models import EmitenteModel
+from backend.core.auditoria import registrar_auditoria
 
 # ─────────────────────────────────────────
 # PIX
@@ -77,6 +78,9 @@ def salvar_configuracao_pix(
 ) -> tuple[bool, str]:
     ok, msg = validar_chave_pix(tipo, chave)
     if not ok:
+        registrar_auditoria(
+            "alterar_configuracao", "pix", "", f"Falha: {msg}", sucesso=False
+        )
         return False, msg
     if len(banco.strip()) < 2:
         return False, "Banco / Instituição deve ter ao menos 2 caracteres."
@@ -87,11 +91,18 @@ def salvar_configuracao_pix(
     set_config("pix_banco", banco)
     set_config("pix_nome", nome_titular)
     set_config("pix_ativo", "True")
+    registrar_auditoria(
+        "alterar_configuracao",
+        "pix",
+        "",
+        f"PIX ativado. Banco='{banco.strip()}', titular='{nome_titular.strip()}'",
+    )
     return True, "PIX configurado."
 
 
 def desativar_pix():
     set_config("pix_ativo", "False")
+    registrar_auditoria("alterar_configuracao", "pix", "", "PIX desativado")
 
 
 # ─────────────────────────────────────────
@@ -164,8 +175,10 @@ def validar_campo_emitente(campo: str, valor: str) -> tuple[bool, str, str]:
 
 def consultar_cep(cep: str) -> dict | None:
     """
-    Consulta o ViaCEP. Retorna dict com logradouro/bairro/municipio/uf
-    (já validados pelo EmitenteModel quando possível) ou None se CEP não encontrado.
+    Consulta o CEP (ViaCEP com fallback BrasilAPI). Retorna dict com
+    logradouro/bairro/municipio/uf (município/UF já validados pelo
+    EmitenteModel quando possível) ou None se CEP não encontrado em
+    nenhuma fonte.
     """
     end_api = buscar_endereco_por_cep(cep)
     if not end_api:
@@ -173,7 +186,7 @@ def consultar_cep(cep: str) -> dict | None:
 
     log_api = end_api.get("logradouro", "").strip()
     bairro_api = end_api.get("bairro", "").strip()
-    mun_api = end_api.get("localidade", "").strip()
+    mun_api = end_api.get("cidade", "").strip()
     uf_api = end_api.get("uf", "").strip()
 
     _, municipio, _ = validar_campo_emitente("municipio", mun_api)
@@ -214,6 +227,12 @@ def salvar_dados_emitente(dados: dict) -> tuple[bool, list[dict]]:
         if chave == "nome_fantasia" and valor is None:
             continue
         set_config(f"emit_{chave}", str(valor))
+    registrar_auditoria(
+        "alterar_configuracao",
+        "emitente",
+        "",
+        f"Razão social='{validado.get('razao_social', '')}', CNPJ='{validado.get('cnpj', '')}'",
+    )
     return True, []
 
 

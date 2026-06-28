@@ -1,10 +1,11 @@
 import sqlite3
 from config import TIPOS_PESO, UNIDADE_LABEL, DESCONTO_MAX_OPERADOR
-from core.database import get_db_connection
-from core.helpers import _iso_now, _fmt_data, get_config
-from core.state import state
-from core.fiscal.pix import gerar_pdf_pix
-from core.fiscal.cupom import formatar_cupom, exportar_pdf_cupom
+from backend.core.database import get_db_connection
+from backend.core.helpers import _iso_now, _fmt_data, get_config
+from backend.core.state import state
+from backend.core.fiscal.pix import gerar_pdf_pix
+from backend.core.fiscal.cupom import formatar_cupom, exportar_pdf_cupom
+from backend.core.auditoria import registrar_auditoria
 
 
 def buscar_produto_por_ean(ean: str) -> dict | None:
@@ -358,14 +359,20 @@ def cancelar_venda(venda_id: int, motivo: str) -> tuple[bool, str]:
     Retorna (sucesso, mensagem).
     """
     if not (state.operador and state.operador["perfil"] == "admin"):
+        registrar_auditoria(
+            "cancelar", "venda", venda_id, "Falha: acesso restrito a administradores", sucesso=False
+        )
         return False, "Acesso restrito a administradores."
 
     venda, itens = buscar_venda(venda_id)
     if not venda:
+        registrar_auditoria("cancelar", "venda", venda_id, "Falha: não encontrada", sucesso=False)
         return False, "Venda não encontrada."
     if venda["status"] == "cancelada":
+        registrar_auditoria("cancelar", "venda", venda_id, "Falha: já estava cancelada", sucesso=False)
         return False, "Já cancelada."
     if not motivo.strip():
+        registrar_auditoria("cancelar", "venda", venda_id, "Falha: motivo não informado", sucesso=False)
         return False, "Informe o motivo."
 
     try:
@@ -391,6 +398,10 @@ def cancelar_venda(venda_id: int, motivo: str) -> tuple[bool, str]:
                 "UPDATE vendas SET status='cancelada', motivo_cancelamento=? WHERE id=?",
                 (motivo, venda_id),
             )
+        registrar_auditoria(
+            "cancelar", "venda", venda_id, f"Motivo: {motivo.strip()} | Total: R$ {venda['total']:.2f}"
+        )
         return True, f"Venda #{venda_id} cancelada e estoque restaurado."
     except Exception as e:
+        registrar_auditoria("cancelar", "venda", venda_id, f"Falha: {e}", sucesso=False)
         return False, f"Erro: {e}"

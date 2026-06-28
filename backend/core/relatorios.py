@@ -1,5 +1,5 @@
-from core.database import get_db_connection
-from core.helpers import _iso_de_br
+from backend.core.database import get_db_connection
+from backend.core.helpers import _iso_de_br
 
 
 def relatorio_vendas_periodo(data_ini_br: str, data_fim_br: str) -> dict:
@@ -34,6 +34,60 @@ def relatorio_vendas_periodo(data_ini_br: str, data_fim_br: str) -> dict:
         "totais_por_forma": totais,
         "total_geral": total_geral,
     }
+
+
+def relatorio_vendas_mensal(meses: int = 12) -> list[dict]:
+    """
+    Agrega vendas concluídas por mês (AAAA-MM), nos últimos `meses` meses
+    a partir do mês atual, incluindo meses sem nenhuma venda (com total=0).
+    Retorna lista ordenada do mês mais antigo para o mais recente —
+    ordem natural para um gráfico de linha/barras.
+    """
+    from datetime import datetime
+
+    hoje = datetime.now()
+    ano_base, mes_base = hoje.year, hoje.month
+
+    meses_alvo = []
+    for i in range(meses - 1, -1, -1):
+        # Subtrai i meses de (ano_base, mes_base) usando aritmética inteira
+        # em base-0, sem depender de bibliotecas externas de data.
+        indice_total = (mes_base - 1) - i
+        ano = ano_base + indice_total // 12
+        mes_num = indice_total % 12 + 1
+        meses_alvo.append(f"{ano:04d}-{mes_num:02d}")
+
+    with get_db_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT strftime('%Y-%m', data_hora) AS mes,
+                   SUM(total) AS total_vendido,
+                   COUNT(*) AS qtd_vendas
+            FROM vendas
+            WHERE status='concluida'
+            GROUP BY mes
+            """
+        ).fetchall()
+
+    por_mes = {r["mes"]: {"total_vendido": r["total_vendido"], "qtd_vendas": r["qtd_vendas"]} for r in rows}
+
+    nomes_meses_pt = [
+        "Jan", "Fev", "Mar", "Abr", "Mai", "Jun",
+        "Jul", "Ago", "Set", "Out", "Nov", "Dez",
+    ]
+    resultado = []
+    for mes_str in meses_alvo:
+        ano, mes_num = mes_str.split("-")
+        dados = por_mes.get(mes_str, {"total_vendido": 0.0, "qtd_vendas": 0})
+        resultado.append(
+            {
+                "mes": mes_str,
+                "rotulo": f"{nomes_meses_pt[int(mes_num) - 1]}/{ano[2:]}",
+                "total_vendido": dados["total_vendido"] or 0.0,
+                "qtd_vendas": dados["qtd_vendas"] or 0,
+            }
+        )
+    return resultado
 
 
 def relatorio_curva_abc(limite: int = 20) -> list[dict]:

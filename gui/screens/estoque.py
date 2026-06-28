@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
-from core.estoque import buscar_produtos, adicionar_produto, ajustar_estoque
-from config import TIPOS_UNIDADE_VALIDOS
+from backend.core.estoque import buscar_produtos, adicionar_produto, ajustar_estoque
+from backend.config import TIPOS_UNIDADE_VALIDOS
 
 
 class TelaEstoque(tk.Frame):

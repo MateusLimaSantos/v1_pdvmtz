@@ -6,7 +6,6 @@ tudo. Para segredos reais (tokens de API), ciframos com Fernet antes
 de gravar, e a chave de cifragem fica em um arquivo separado do
 banco, fora do .db, para que copiar só o banco não exponha o token.
 """
-
 import os
 from cryptography.fernet import Fernet, InvalidToken
 from config import DATA_DIR
