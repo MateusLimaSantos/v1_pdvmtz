@@ -29,3 +29,4 @@ _temp_*.png
 .idea/
 Thumbs.db
 .DS_Store
+data/.chave_local
