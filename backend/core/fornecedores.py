@@ -1,8 +1,8 @@
 import re
 import sqlite3
-from backend.core.database import get_db_connection
-from backend.core.helpers import validar_cnpj_input, validar_telefone_simples, validar_email
-from backend.core.auditoria import registrar_auditoria
+from core.database import get_db_connection
+from core.helpers import validar_cnpj_input, validar_telefone_simples, validar_email
+from core.auditoria import registrar_auditoria
 
 
 def cadastrar_fornecedor(

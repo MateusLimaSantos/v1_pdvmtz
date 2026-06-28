@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 
-from backend.core.fornecedores import (
+from core.fornecedores import (
     cadastrar_fornecedor,
     listar_fornecedores,
     atualizar_fornecedor,

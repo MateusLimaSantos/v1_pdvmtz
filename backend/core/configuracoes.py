@@ -1,14 +1,14 @@
 import re
 from pydantic import ValidationError
 
-from backend.core.helpers import (
+from core.helpers import (
     get_config,
     set_config,
     get_dados_emitente,
     buscar_endereco_por_cep,
 )
-from backend.core.models import EmitenteModel
-from backend.core.auditoria import registrar_auditoria
+from core.models import EmitenteModel
+from core.auditoria import registrar_auditoria
 
 # ─────────────────────────────────────────
 # PIX

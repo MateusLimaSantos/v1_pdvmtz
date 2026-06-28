@@ -2,7 +2,7 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog
 
-from backend.core.caixa import (
+from core.caixa import (
     caixa_aberto_no_banco,
     abrir_caixa,
     fechar_caixa,
@@ -10,7 +10,7 @@ from backend.core.caixa import (
     registrar_sangria,
     registrar_suprimento,
 )
-from backend.core.pdv import (
+from core.pdv import (
     buscar_produto_por_ean,
     adicionar_item_ao_carrinho,
     total_bruto_carrinho,
@@ -24,15 +24,15 @@ from backend.core.pdv import (
     alterar_quantidade_indice,
     calcular_desconto_valor,
 )
-from backend.core.fiscal.pagamento import (
+from core.fiscal.pagamento import (
     iniciar_cobranca,
     confirmar_recebimento_manual,
     consultar_status_cobranca,
     cancelar_cobranca,
 )
-from backend.core.state import state
-from backend.core.helpers import parse_float
-from backend.config import TIPOS_PESO
+from core.state import state
+from core.helpers import parse_float
+from config import TIPOS_PESO
 
 
 class TelaPDV(tk.Frame):

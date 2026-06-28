@@ -2,22 +2,22 @@ import os
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 
-from backend.config import BASE_DIR, REPORTS_DIR, TIPOS_UNIDADE_VALIDOS
-from backend.core.configuracoes import (
+from config import BASE_DIR, REPORTS_DIR, TIPOS_UNIDADE_VALIDOS
+from core.configuracoes import (
     salvar_dados_emitente,
     salvar_configuracao_pix,
     desativar_pix,
 )
-from backend.core.helpers import get_config, set_config
-from backend.core.state import state
-from backend.core.operadores import (
+from core.helpers import get_config, set_config
+from core.state import state
+from core.operadores import (
     cadastrar_operador,
     listar_operadores,
     redefinir_senha,
     desativar_operador,
     reativar_operador,
 )
-from backend.core.fiscal.pagamento import (
+from core.fiscal.pagamento import (
     obter_modo_pagamento as get_modo_pagamento,
     salvar_modo_pagamento,
     salvar_credencial_gateway,

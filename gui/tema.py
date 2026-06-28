@@ -19,7 +19,7 @@ Estratégia (Tkinter não tem tema nativo — ver discussão no projeto):
 import tkinter as tk
 from tkinter import ttk
 
-from backend.core.helpers import get_config, set_config
+from core.helpers import get_config, set_config
 
 CLARO = {
     "fundo": "#f5f5f5",

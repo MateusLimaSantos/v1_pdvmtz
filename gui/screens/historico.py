@@ -9,12 +9,12 @@ from tkinter import (
     scrolledtext,
 )  # <-- Adicione o scrolledtext
 
-from backend.core.historico import listar_vendas, detalhes_venda
-from backend.core.pdv import cancelar_venda
-from backend.core.state import state
+from core.historico import listar_vendas, detalhes_venda
+from core.pdv import cancelar_venda
+from core.state import state
 
 # IMPORTANTE: Ajuste o caminho de importação abaixo conforme a estrutura de pastas do seu projeto
-from backend.core.fiscal.cupom import formatar_cupom, exportar_pdf_cupom
+from core.fiscal.cupom import formatar_cupom, exportar_pdf_cupom
 
 
 class TelaHistorico(tk.Frame):

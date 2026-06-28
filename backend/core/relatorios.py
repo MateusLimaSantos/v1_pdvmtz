@@ -1,5 +1,5 @@
-from backend.core.database import get_db_connection
-from backend.core.helpers import _iso_de_br
+from core.database import get_db_connection
+from core.helpers import _iso_de_br
 
 
 def relatorio_vendas_periodo(data_ini_br: str, data_fim_br: str) -> dict:

@@ -6,10 +6,10 @@ import tkinter as tk
 from pathlib import Path
 from tkinter import ttk, messagebox, filedialog
 
-from backend.config import BASE_DIR, REPORTS_DIR, TIPOS_UNIDADE_VALIDOS
-from backend.core.auth import _hash_senha
-from backend.core.database import get_db_connection
-from backend.core.configuracoes import (
+from config import BASE_DIR, REPORTS_DIR, TIPOS_UNIDADE_VALIDOS
+from core.auth import _hash_senha
+from core.database import get_db_connection
+from core.configuracoes import (
     salvar_dados_emitente,
     salvar_configuracao_pix,
     desativar_pix,
@@ -17,7 +17,7 @@ from backend.core.configuracoes import (
     cartao_esta_ativo,
     marcar_setup_concluido,
 )
-from backend.core.helpers import set_config
+from core.helpers import set_config
 
 
 class SetupInicial:

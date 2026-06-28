@@ -4,7 +4,7 @@ from tkinter import ttk
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
-from backend.core.relatorios import relatorio_vendas_mensal
+from core.relatorios import relatorio_vendas_mensal
 
 
 class TelaGraficos(tk.Frame):

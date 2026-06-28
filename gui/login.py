@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import messagebox
-from backend.core.auth import autenticar
-from backend.core.state import state
+from core.auth import autenticar
+from core.state import state
 
 
 class TelaLogin:

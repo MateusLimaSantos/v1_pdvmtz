@@ -4,8 +4,8 @@ import requests
 from datetime import datetime
 from pydantic import ValidationError
 
-from backend.core.database import get_db_connection
-from backend.core.models import EmitenteModel, validar_cnpj
+from core.database import get_db_connection
+from core.models import EmitenteModel, validar_cnpj
 
 # ─────────────────────────────────────────
 # HELPERS DE DATA / HORA

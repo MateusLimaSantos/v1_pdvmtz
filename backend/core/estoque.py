@@ -1,9 +1,9 @@
 import sqlite3
 from config import TIPOS_UNIDADE_VALIDOS, TIPOS_PESO, UNIDADE_LABEL
-from backend.core.database import get_db_connection
-from backend.core.helpers import _iso_now, _fmt_data
-from backend.core.state import state
-from backend.core.auditoria import registrar_auditoria
+from core.database import get_db_connection
+from core.helpers import _iso_now, _fmt_data
+from core.state import state
+from core.auditoria import registrar_auditoria
 
 # ─────────────────────────────────────────
 # PRODUTOS

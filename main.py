@@ -8,8 +8,8 @@ for caminho in (BASE_DIR, BACKEND_DIR):
     if caminho not in sys.path:
         sys.path.insert(0, caminho)
 
-from backend.core.database import inicializar_banco
-from backend.core.configuracoes import setup_concluido
+from core.database import inicializar_banco
+from core.configuracoes import setup_concluido
 from gui.setup import SetupInicial
 from gui.app import AppPDV
 

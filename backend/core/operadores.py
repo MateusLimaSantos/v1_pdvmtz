@@ -1,8 +1,8 @@
 import sqlite3
-from backend.core.database import get_db_connection
-from backend.core.auth import _hash_senha
-from backend.core.state import state
-from backend.core.auditoria import registrar_auditoria
+from core.database import get_db_connection
+from core.auth import _hash_senha
+from core.state import state
+from core.auditoria import registrar_auditoria
 
 
 def cadastrar_operador(nome: str, senha: str, perfil: str) -> tuple[bool, str]:

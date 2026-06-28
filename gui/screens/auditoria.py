@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
 
-from backend.core.auditoria import listar_auditoria, listar_entidades_distintas, listar_acoes_distintas
+from core.auditoria import listar_auditoria, listar_entidades_distintas, listar_acoes_distintas
 
 
 class TelaAuditoria(tk.Frame):

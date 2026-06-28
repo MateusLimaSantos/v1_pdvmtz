@@ -2,10 +2,10 @@ import math
 import sqlite3
 
 
-from backend.core.database import get_db_connection
-from backend.core.helpers import _iso_now, _fmt_data
-from backend.core.state import state
-from backend.core.auditoria import registrar_auditoria
+from core.database import get_db_connection
+from core.helpers import _iso_now, _fmt_data
+from core.state import state
+from core.auditoria import registrar_auditoria
 
 
 def _e_numero_finito(valor: float) -> bool:

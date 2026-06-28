@@ -9,8 +9,8 @@ from gui.screens.fornecedores import TelaFornecedores
 from gui.screens.relatorios import TelaRelatorios
 from gui.screens.auditoria import TelaAuditoria
 from gui.screens.graficos import TelaGraficos
-from backend.core.state import state
-from backend.core.helpers import get_config
+from core.state import state
+from core.helpers import get_config
 from gui.tema import (
     aplicar_defaults_globais,
     aplicar_tema_em_toda_aplicacao,

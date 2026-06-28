@@ -1,6 +1,6 @@
-from backend.config import TIPOS_PESO, UNIDADE_LABEL
-from backend.core.helpers import _fmt_data
-from backend.core.database import get_db_connection
+from config import TIPOS_PESO, UNIDADE_LABEL
+from core.helpers import _fmt_data
+from core.database import get_db_connection
 
 
 def listar_vendas(

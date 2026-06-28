@@ -3,7 +3,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime, timedelta
 
-from backend.core.relatorios import relatorio_vendas_periodo, relatorio_curva_abc
+from core.relatorios import relatorio_vendas_periodo, relatorio_curva_abc
 
 
 class TelaRelatorios(tk.Frame):

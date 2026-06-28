@@ -1,11 +1,11 @@
 import sqlite3
 from config import TIPOS_PESO, UNIDADE_LABEL, DESCONTO_MAX_OPERADOR
-from backend.core.database import get_db_connection
-from backend.core.helpers import _iso_now, _fmt_data, get_config
-from backend.core.state import state
-from backend.core.fiscal.pix import gerar_pdf_pix
-from backend.core.fiscal.cupom import formatar_cupom, exportar_pdf_cupom
-from backend.core.auditoria import registrar_auditoria
+from core.database import get_db_connection
+from core.helpers import _iso_now, _fmt_data, get_config
+from core.state import state
+from core.fiscal.pix import gerar_pdf_pix
+from core.fiscal.cupom import formatar_cupom, exportar_pdf_cupom
+from core.auditoria import registrar_auditoria
 
 
 def buscar_produto_por_ean(ean: str) -> dict | None:
