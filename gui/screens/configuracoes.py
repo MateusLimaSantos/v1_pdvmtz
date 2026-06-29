@@ -36,6 +36,7 @@ class TelaConfiguracoes(tk.Frame):
         self.vars: dict[str, tk.StringVar] = {}
         self.bool_vars: dict[str, tk.BooleanVar] = {}
         self._entries_por_aba: dict[int, list[tk.Entry]] = {}
+        self._entries_por_chave: dict[str, tk.Entry] = {}
         self._frame_aba_atual = None
         self.pack(fill="both", expand=True, padx=12, pady=12)
 
@@ -101,6 +102,7 @@ class TelaConfiguracoes(tk.Frame):
         ent = tk.Entry(parent, textvariable=var, width=48, show=show)
         ent.grid(row=row, column=1, sticky="ew", padx=4, pady=4)
         self.vars[chave] = var
+        self._entries_por_chave[chave] = ent
         self._registrar_entry_na_aba(parent, ent)
         return ent
 
@@ -109,6 +111,60 @@ class TelaConfiguracoes(tk.Frame):
         if chave_aba not in self._entries_por_aba:
             chave_aba = id(self._frame_aba_atual)
         self._entries_por_aba.setdefault(chave_aba, []).append(entry)
+
+    def _entry_por_chave(self, chave: str) -> tk.Entry | None:
+        return self._entries_por_chave.get(chave)
+
+    def _configurar_autocomplete_cep(
+        self, entry_cep: tk.Entry | None, campos_destino: dict[str, tk.Entry | None]
+    ):
+        """
+        Ao sair do campo CEP (perder o foco) ou apertar Enter nele,
+        consulta o endereço numa thread separada (para não congelar a
+        janela enquanto espera a rede) e preenche automaticamente
+        logradouro/bairro/município/UF. Nunca sobrescreve o que o
+        usuário já tiver digitado manualmente — só preenche campos
+        vazios. O número nunca é preenchido automaticamente.
+        """
+        import re
+        import threading
+
+        if entry_cep is None:
+            return
+
+        def disparar_busca(_event=None):
+            cep_texto = entry_cep.get().strip()
+            cep_limpo = re.sub(r"\D", "", cep_texto)
+            if len(cep_limpo) != 8:
+                return
+
+            def buscar_em_thread():
+                from core.helpers import buscar_endereco_por_cep
+
+                resultado = buscar_endereco_por_cep(cep_limpo)
+                self.winfo_toplevel().after(0, lambda: aplicar_resultado(resultado))
+
+            def aplicar_resultado(resultado: dict | None):
+                if not resultado:
+                    return
+                mapa = {
+                    "logradouro": resultado.get("logradouro", ""),
+                    "bairro": resultado.get("bairro", ""),
+                    "municipio": resultado.get("cidade", ""),
+                    "uf": resultado.get("uf", ""),
+                }
+                for chave, valor in mapa.items():
+                    campo = campos_destino.get(chave)
+                    if campo is None or not valor:
+                        continue
+                    if not campo.get().strip():
+                        campo.delete(0, tk.END)
+                        campo.insert(0, valor)
+
+            threading.Thread(target=buscar_em_thread, daemon=True).start()
+
+        entry_cep.bind("<FocusOut>", disparar_busca)
+        entry_cep.bind("<Return>", lambda e: disparar_busca(), add="+")
 
     def _combo(
         self,
@@ -242,6 +298,16 @@ class TelaConfiguracoes(tk.Frame):
 
         self._notebook = notebook
         self._encadear_enters_por_aba()
+
+        self._configurar_autocomplete_cep(
+            entry_cep=self._entry_por_chave("cep"),
+            campos_destino={
+                "logradouro": self._entry_por_chave("logradouro"),
+                "bairro": self._entry_por_chave("bairro"),
+                "municipio": self._entry_por_chave("municipio"),
+                "uf": self._entry_por_chave("uf"),
+            },
+        )
 
     def _montar_empresa(self, aba):
         aba.columnconfigure(1, weight=1)
