@@ -6,6 +6,7 @@ tudo. Para segredos reais (tokens de API), ciframos com Fernet antes
 de gravar, e a chave de cifragem fica em um arquivo separado do
 banco, fora do .db, para que copiar só o banco não exponha o token.
 """
+
 import os
 from cryptography.fernet import Fernet, InvalidToken
 from config import DATA_DIR
@@ -53,3 +54,32 @@ def mascarar_token(texto_claro: str, visiveis: int = 4) -> str:
     if len(texto_claro) <= visiveis:
         return "*" * len(texto_claro)
     return "*" * (len(texto_claro) - visiveis) + texto_claro[-visiveis:]
+
+
+def cifrar_arquivo(caminho_origem: str, caminho_destino: str) -> tuple[bool, str]:
+    """
+    Cifra o conteúdo binário de um arquivo (ex: certificado .pfx) e
+    grava o resultado em caminho_destino. Usado para nunca guardar o
+    certificado digital em texto/binário puro no disco.
+    """
+    try:
+        with open(caminho_origem, "rb") as f:
+            dados = f.read()
+        f_cifra = Fernet(_obter_ou_criar_chave())
+        cifrado = f_cifra.encrypt(dados)
+        with open(caminho_destino, "wb") as f:
+            f.write(cifrado)
+        return True, "Arquivo cifrado com sucesso."
+    except OSError as e:
+        return False, f"Erro ao ler/gravar arquivo: {e}"
+
+
+def decifrar_arquivo_para_bytes(caminho_cifrado: str) -> bytes | None:
+    """Lê um arquivo cifrado por cifrar_arquivo e retorna seu conteúdo original em bytes, ou None se falhar."""
+    try:
+        with open(caminho_cifrado, "rb") as f:
+            cifrado = f.read()
+        f_cifra = Fernet(_obter_ou_criar_chave())
+        return f_cifra.decrypt(cifrado)
+    except (OSError, InvalidToken, ValueError):
+        return None

@@ -54,7 +54,7 @@ class TelaHistorico(tk.Frame):
 
         # 3. Criar uma nova janela para exibir o texto do cupom
         janela_cupom = tk.Toplevel(self)
-        janela_cupom.title(f"Nota Fiscal - Venda #{venda['id']}")
+        janela_cupom.title(f"Cupom Interno (não fiscal) - Venda #{venda['id']}")
         janela_cupom.geometry("350x550")
 
         # Área de texto com barra de rolagem (somente leitura)
@@ -329,7 +329,7 @@ class TelaHistorico(tk.Frame):
 
         tk.Button(
             frame_rodape,
-            text="Ver Nota Fiscal",
+            text="Ver Cupom (não fiscal)",
             command=lambda: self._mostrar_cupom(venda),
             bg="#1976D2",
             fg="white",

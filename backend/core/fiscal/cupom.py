@@ -1,10 +1,9 @@
 import os
-import qrcode
 from datetime import datetime
 from fpdf import FPDF
 from fpdf.enums import XPos, YPos
 
-from config import BASE_DIR, REPORTS_DIR, UNIDADE_LABEL
+from config import REPORTS_DIR, UNIDADE_LABEL
 from core.helpers import get_dados_emitente
 from core.fiscal.pix import _pdf_safe
 
@@ -65,17 +64,11 @@ def formatar_cupom(
 
 
 def exportar_pdf_cupom(cupom_texto: str, numero_nota: int) -> str:
-    """Gera o PDF do cupom de venda e retorna o caminho do arquivo gerado."""
+    """Gera o PDF do cupom interno (não fiscal) de venda e retorna o caminho do arquivo gerado."""
     emit = get_dados_emitente()
     end_emit = _pdf_safe(f"{emit['logradouro']}, {emit['numero']} - {emit['bairro']}")
 
-    tmp_qr = os.path.join(BASE_DIR, "_temp_qr_cupom.png")
     nome_arq = os.path.join(REPORTS_DIR, f"Cupom_Venda_{numero_nota:04d}.pdf")
-
-    chave_fake = "35260600000000000100650010000005096100000000"
-    qrcode.make(
-        f"https://www.sefaz.sp.gov.br/NFCE/NFCE-COM.aspx?chNFe={chave_fake}"
-    ).save(tmp_qr)
 
     pdf = FPDF(format=(80, 270))
     pdf.add_page()
@@ -112,14 +105,19 @@ def exportar_pdf_cupom(cupom_texto: str, numero_nota: int) -> str:
     pdf.line(2, pdf.get_y() + 1, 78, pdf.get_y() + 1)
     pdf.ln(3)
 
-    pdf.set_font("Helvetica", "B", 7)
+    # Aviso bem visível: este é um comprovante interno, NÃO um documento
+    # fiscal. O sistema ainda não emite NFC-e/SAT reais (ver core/configuracoes
+    # e a aba Fiscal do painel admin). Nenhum QR code de consulta fiscal real
+    # deve ser gerado aqui, para não sugerir validade fiscal que não existe.
+    pdf.set_font("Helvetica", "B", 8)
+    pdf.set_text_color(180, 0, 0)
     pdf.multi_cell(
         0,
-        3,
-        "DANFE NFC-e - Documento Auxiliar da\n"
-        "Nota Fiscal de Consumidor Eletronica (Simulado)",
+        3.5,
+        "COMPROVANTE INTERNO\nNAO TEM VALOR FISCAL",
         align="C",
     )
+    pdf.set_text_color(0, 0, 0)
     pdf.line(2, pdf.get_y() + 1, 78, pdf.get_y() + 1)
     pdf.ln(3)
 
@@ -130,13 +128,16 @@ def exportar_pdf_cupom(cupom_texto: str, numero_nota: int) -> str:
     pdf.line(2, pdf.get_y() + 1, 78, pdf.get_y() + 1)
     pdf.ln(3)
     pdf.set_font("Helvetica", "B", 7)
-    pdf.cell(
-        0, 4, "Consulte via QR Code:", new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C"
+    pdf.set_text_color(180, 0, 0)
+    pdf.multi_cell(
+        0,
+        3,
+        "Este comprovante e gerado internamente pelo\n"
+        "estabelecimento e nao substitui documento fiscal.",
+        align="C",
     )
-    pdf.image(tmp_qr, x=25, y=pdf.get_y(), w=30)
-    pdf.ln(35)
+    pdf.set_text_color(0, 0, 0)
+    pdf.ln(2)
 
     pdf.output(nome_arq)
-    if os.path.exists(tmp_qr):
-        os.remove(tmp_qr)
     return nome_arq
