@@ -3,7 +3,7 @@ from gui.login import TelaLogin
 from gui.screens.pdv import TelaPDV
 from gui.screens.estoque import TelaEstoque
 from gui.screens.nfe import TelaNFe
-from gui.screens.configuracoes import TelaConfiguracoes
+from gui.screens.configuracoes_com_fiscal import TelaConfiguracoes
 from gui.screens.historico import TelaHistorico
 from gui.screens.fornecedores import TelaFornecedores
 from gui.screens.relatorios import TelaRelatorios
