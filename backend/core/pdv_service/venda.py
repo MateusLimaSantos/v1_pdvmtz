@@ -1,3 +1,13 @@
+import sqlite3
+
+from core.database import get_db_connection
+from core.fiscal.cupom import formatar_cupom
+from core.state import state
+
+from .carrinho import total_bruto_carrinho
+from .estoque_pdv import produtos_estoque_baixo
+
+
 def finalizar_venda(
     itens_carrinho: list[dict],
     desconto_venda: float,
@@ -6,14 +16,13 @@ def finalizar_venda(
 ) -> tuple[bool, str, dict | None]:
     """
     Persiste a venda no banco: atualiza estoque, grava venda e itens.
-    Retorna (sucesso, mensagem, dados_da_venda) onde dados_da_venda contém
-    venda_id, cupom_texto e a lista de alertas de estoque baixo (se sucesso).
+    Retorna (sucesso, mensagem, dados_da_venda).
     """
     if not itens_carrinho:
         return False, "Carrinho vazio.", None
 
     if state._finalizando:
-        return False, "Venda já está sendo processada.", None
+        return False, "Venda ja esta sendo processada.", None
     state._finalizando = True
 
     total_bruto = total_bruto_carrinho(itens_carrinho)
@@ -105,8 +114,8 @@ def finalizar_venda(
         )
 
     except sqlite3.IntegrityError as e:
-        return False, f"ERRO DE INTEGRIDADE: {e} — transação desfeita.", None
+        return False, f"ERRO DE INTEGRIDADE: {e} - transacao desfeita.", None
     except sqlite3.OperationalError as e:
-        return False, f"ERRO OPERACIONAL: {e} — transação desfeita.", None
+        return False, f"ERRO OPERACIONAL: {e} - transacao desfeita.", None
     finally:
         state._finalizando = False

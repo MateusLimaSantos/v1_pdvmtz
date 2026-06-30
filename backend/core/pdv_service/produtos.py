@@ -1,5 +1,8 @@
+from core.database import get_db_connection
+
+
 def buscar_produto_por_ean(ean: str) -> dict | None:
-    """Retorna item padronizado para o carrinho, ou None se EAN não encontrado."""
+    """Retorna item padronizado para o carrinho, ou None se EAN nao encontrado."""
     with get_db_connection() as conn:
         row = conn.execute("SELECT * FROM produtos WHERE ean=?", (ean,)).fetchone()
         if row:
@@ -16,6 +19,7 @@ def buscar_produto_por_ean(ean: str) -> dict | None:
                 "estoque_disponivel": p["estoque_atual"],
                 "desconto_item": 0.0,
             }
+
         emb = conn.execute(
             "SELECT * FROM embalagens WHERE ean_embalagem=?", (ean,)
         ).fetchone()
@@ -47,16 +51,15 @@ def buscar_produto_por_ean(ean: str) -> dict | None:
 def registrar_peso(item: dict, peso: float) -> tuple[bool, str]:
     """
     Valida e aplica o peso informado para um item vendido por peso/volume.
-    Modifica `item` em memória (qtd_desconto e preco_total).
-    Retorna (sucesso, mensagem_de_erro_se_houver).
+    Modifica `item` em memoria (qtd_desconto e preco_total).
     """
     un = item["tipo_unidade"]
     if peso <= 0:
-        return False, "Peso inválido."
+        return False, "Peso invalido."
     if peso > item["estoque_disponivel"]:
         return (
             False,
-            f"Estoque insuficiente. Disponível: {item['estoque_disponivel']:.3f} {un}",
+            f"Estoque insuficiente. Disponivel: {item['estoque_disponivel']:.3f} {un}",
         )
     item["qtd_desconto"] = peso
     item["preco_total"] = round(item["preco_referencia"] * peso, 2)

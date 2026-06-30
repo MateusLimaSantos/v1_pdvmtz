@@ -1,20 +1,13 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 
-class EmpresaTab(tk.Frame):
-    def __int__(self, notebook, controlador):
-        super().__init__(notebook)
-        self.controlador = controlador
-        
-        notebook.add(self, text="Empresa")
-        
-        self._montar_empresa(self)
-        
+from core.configuracoes import salvar_dados_emitente
 
+
+class EmpresaTabMixin:
     def _montar_empresa(self, aba):
         aba.columnconfigure(1, weight=1)
         self._titulo(aba, "Dados da empresa", 0)
-
         campos = [
             ("Razao social", "razao_social", "emit_razao_social"),
             ("Nome fantasia", "nome_fantasia", "emit_nome_fantasia"),
@@ -29,10 +22,8 @@ class EmpresaTab(tk.Frame):
             ("UF", "uf", "emit_uf"),
             ("Regime/CRT", "regime", "emit_regime"),
         ]
-
         for i, (label, chave, cfg) in enumerate(campos, start=1):
             self._campo(aba, label, chave, i, self._cfg(cfg))
-
         tk.Button(
             aba,
             text="Salvar empresa",
@@ -40,7 +31,6 @@ class EmpresaTab(tk.Frame):
             bg="#2e7d32",
             fg="white",
         ).grid(row=len(campos) + 1, column=1, sticky="e", pady=12)
-
 
     def _salvar_empresa(self):
         dados = {
@@ -57,12 +47,9 @@ class EmpresaTab(tk.Frame):
             "uf": self._valor("uf"),
             "regime": self._valor("regime"),
         }
-
         ok, erros = salvar_dados_emitente(dados)
-
         if not ok:
             texto = "\n".join(f"- {e['campo']}: {e['mensagem']}" for e in erros)
             messagebox.showerror("Dados da empresa", texto)
             return
-
         messagebox.showinfo("Configuracoes", "Dados da empresa salvos.")

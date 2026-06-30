@@ -1,19 +1,16 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, simpledialog
+from tkinter import messagebox, simpledialog, ttk
 
-class OperadoresTab(tk.Frame):
-    def __init__(self, notebook, controlador):
-        super().__init__(notebook)
-        
-        self.controlador = controlador
-        
-        self.vars = {}
-        
-        notebook.add(self, text="Operadores")
-        
-        self._montar_orperadores(self)
+from core.operadores import (
+    cadastrar_operador,
+    desativar_operador,
+    listar_operadores,
+    reativar_operador,
+    redefinir_senha,
+)
 
 
+class OperadoresTabMixin:
     def _montar_operadores(self, aba):
         aba.columnconfigure(0, weight=1)
 
@@ -24,7 +21,9 @@ class OperadoresTab(tk.Frame):
         ).grid(row=0, column=0, sticky="w", pady=(10, 6))
 
         colunas = ("id", "nome", "perfil", "status")
-        self.tree_operadores = ttk.Treeview(aba, columns=colunas, show="headings", height=8)
+        self.tree_operadores = ttk.Treeview(
+            aba, columns=colunas, show="headings", height=8
+        )
         self.tree_operadores.heading("id", text="ID")
         self.tree_operadores.heading("nome", text="Nome")
         self.tree_operadores.heading("perfil", text="Perfil")
@@ -56,7 +55,9 @@ class OperadoresTab(tk.Frame):
         self._titulo(aba, "Cadastrar novo operador", 3)
         self._campo(aba, "Nome", "novo_op_nome", 4)
         self._campo(aba, "Senha (min. 4 caracteres)", "novo_op_senha", 5, show="*")
-        self._combo(aba, "Perfil", "novo_op_perfil", 6, ("operador", "admin"), "operador")
+        self._combo(
+            aba, "Perfil", "novo_op_perfil", 6, ("operador", "admin"), "operador"
+        )
         tk.Button(
             aba,
             text="Cadastrar operador",
@@ -66,7 +67,6 @@ class OperadoresTab(tk.Frame):
         ).grid(row=7, column=1, sticky="e", pady=12)
 
         self._carregar_operadores()
-
 
     def _carregar_operadores(self):
         for row in self.tree_operadores.get_children():
@@ -80,14 +80,12 @@ class OperadoresTab(tk.Frame):
                 values=(op["id"], op["nome"], op["perfil"], status),
             )
 
-
     def _operador_selecionado_id(self) -> int | None:
         sel = self.tree_operadores.selection()
         if not sel:
             messagebox.showwarning("Operadores", "Selecione um operador na lista.")
             return None
         return int(sel[0])
-
 
     def _cadastrar_operador(self):
         nome = self._valor("novo_op_nome")
@@ -101,7 +99,6 @@ class OperadoresTab(tk.Frame):
         self.vars["novo_op_senha"].set("")
         messagebox.showinfo("Operadores", msg)
         self._carregar_operadores()
-
 
     def _redefinir_senha_operador_selecionado(self):
         op_id = self._operador_selecionado_id()
@@ -118,7 +115,6 @@ class OperadoresTab(tk.Frame):
             return
         messagebox.showinfo("Operadores", msg)
 
-
     def _alternar_status_operador_selecionado(self):
         op_id = self._operador_selecionado_id()
         if op_id is None:
@@ -134,8 +130,3 @@ class OperadoresTab(tk.Frame):
             return
         messagebox.showinfo("Operadores", msg)
         self._carregar_operadores()
-        
-        
-
-
-

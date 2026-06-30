@@ -1,5 +1,11 @@
+from core.auditoria import registrar_auditoria
+from core.database import get_db_connection
+from core.helpers import _iso_now
+from core.state import state
+
+
 def buscar_venda(venda_id: int) -> tuple[dict | None, list[dict]]:
-    """Retorna (venda, itens) ou (None, []) se não encontrada."""
+    """Retorna (venda, itens) ou (None, []) se nao encontrada."""
     with get_db_connection() as conn:
         venda = conn.execute("SELECT * FROM vendas WHERE id=?", (venda_id,)).fetchone()
         if not venda:
@@ -16,9 +22,7 @@ def buscar_venda(venda_id: int) -> tuple[dict | None, list[dict]]:
 def cancelar_venda(venda_id: int, motivo: str) -> tuple[bool, str]:
     """
     Cancela uma venda, restaura o estoque dos itens e registra o motivo.
-    Apenas administradores podem cancelar (a checagem de perfil é responsabilidade da GUI,
-    mas é reforçada aqui também).
-    Retorna (sucesso, mensagem).
+    Apenas administradores podem cancelar.
     """
     if not (state.operador and state.operador["perfil"] == "admin"):
         registrar_auditoria(
@@ -33,17 +37,17 @@ def cancelar_venda(venda_id: int, motivo: str) -> tuple[bool, str]:
     venda, itens = buscar_venda(venda_id)
     if not venda:
         registrar_auditoria(
-            "cancelar", "venda", venda_id, "Falha: não encontrada", sucesso=False
+            "cancelar", "venda", venda_id, "Falha: nao encontrada", sucesso=False
         )
-        return False, "Venda não encontrada."
+        return False, "Venda nao encontrada."
     if venda["status"] == "cancelada":
         registrar_auditoria(
-            "cancelar", "venda", venda_id, "Falha: já estava cancelada", sucesso=False
+            "cancelar", "venda", venda_id, "Falha: ja estava cancelada", sucesso=False
         )
-        return False, "Já cancelada."
+        return False, "Ja cancelada."
     if not motivo.strip():
         registrar_auditoria(
-            "cancelar", "venda", venda_id, "Falha: motivo não informado", sucesso=False
+            "cancelar", "venda", venda_id, "Falha: motivo nao informado", sucesso=False
         )
         return False, "Informe o motivo."
 
@@ -56,7 +60,8 @@ def cancelar_venda(venda_id: int, motivo: str) -> tuple[bool, str]:
                 )
                 conn.execute(
                     "INSERT INTO movimentacoes_estoque "
-                    "(produto_ean, data_hora, tipo, qtd, motivo, operador_id) VALUES (?,?,?,?,?,?)",
+                    "(produto_ean, data_hora, tipo, qtd, motivo, operador_id) "
+                    "VALUES (?,?,?,?,?,?)",
                     (
                         item["produto_ean"],
                         _iso_now(),

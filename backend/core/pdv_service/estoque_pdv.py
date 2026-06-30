@@ -1,5 +1,8 @@
+from core.database import get_db_connection
+
+
 def produtos_estoque_baixo(itens_vendidos: list[dict]) -> list[dict]:
-    """Verifica se algum item vendido ficou com estoque <= mínimo após a venda."""
+    """Verifica se algum item vendido ficou com estoque <= minimo apos a venda."""
     eans = {i["ean_base"] for i in itens_vendidos}
     alertas = []
     with get_db_connection() as conn:
